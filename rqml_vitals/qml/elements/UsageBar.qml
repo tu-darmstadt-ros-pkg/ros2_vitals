@@ -1,9 +1,11 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 
 /**
  * Animated usage bar with optional label and color coding.
+ * Uses Material theme colors for proper dark/light mode support.
  */
 Item {
     id: root
@@ -26,11 +28,11 @@ Item {
     //! Bar height
     property int barHeight: 16
 
-    //! Colors
-    property color normalColor: "#2ecc71"
-    property color warningColor: "#f39c12"
-    property color errorColor: "#e74c3c"
-    property color backgroundColor: palette.mid
+    //! Colors - use Material colors for theme support
+    property color normalColor: Material.color(Material.Green)
+    property color warningColor: Material.color(Material.Orange)
+    property color errorColor: Material.color(Material.Red)
+    property color backgroundColor: Material.background
 
     implicitHeight: barHeight + (label ? 20 : 0)
     implicitWidth: 200
@@ -64,16 +66,19 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: root.barHeight
-            color: root.backgroundColor
+            color: Qt.darker(root.backgroundColor, 1.2)
             radius: 3
+            border.width: 1
+            border.color: Qt.darker(root.backgroundColor, 1.4)
 
             Rectangle {
                 id: fillBar
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                width: Math.max(0, Math.min(1, root.value / 100)) * parent.width
-                radius: 3
+                anchors.margins: 1
+                width: Math.max(0, Math.min(1, root.value / 100)) * (parent.width - 2)
+                radius: 2
 
                 color: root.value >= root.errorThreshold ? root.errorColor
                      : root.value >= root.warningThreshold ? root.warningColor
@@ -94,9 +99,7 @@ Item {
                 text: root.value.toFixed(1) + "%"
                 font.pixelSize: 10
                 font.bold: true
-                color: "white"
-                style: Text.Outline
-                styleColor: "#00000080"
+                color: palette.text
             }
         }
     }

@@ -80,3 +80,7 @@ class RateCalculator:
             keys_to_remove = [k for k in self._prev_values if k.startswith(key_prefix)]
             for key in keys_to_remove:
                 del self._prev_values[key]
+
+    def remove_key(self, key: str):
+        """Remove a specific key from the cache."""
+        self._prev_values.pop(key, None)

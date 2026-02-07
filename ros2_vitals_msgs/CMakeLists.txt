@@ -9,6 +9,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GpuStatus.msg"
   "msg/NetworkInterface.msg"
   "msg/DiskStatus.msg"
+  "msg/ChildProcessStatus.msg"
   "msg/ProcessStatus.msg"
   "msg/SystemStatus.msg"
   "srv/KillProcess.srv"

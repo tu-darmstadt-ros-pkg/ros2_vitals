@@ -11,7 +11,7 @@ string container_name               # Docker container name (empty if not contai
 # Process type and hierarchy
 bool is_launch_process              # True if this is a ros2 launch process
 string launch_name                  # Name of the launch file (only set for launch processes)
-ros2_vitals_msgs/ProcessStatus[] child_nodes  # Child node processes (only for launch processes)
+ros2_vitals_msgs/ChildProcessStatus[] child_nodes  # Child node processes (only for launch processes)
 
 # CPU and memory (includes children)
 float32 cpu_percent                 # CPU usage percentage (includes children)

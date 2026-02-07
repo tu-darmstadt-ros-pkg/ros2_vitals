@@ -104,7 +104,9 @@ class GpuCollector:
             try:
                 util = nvmlDeviceGetUtilizationRates(handle)
                 utilization = float(util.gpu)
-            except Exception:
+                logger.debug(f"GPU {index} utilization: {utilization}% (memory util: {util.memory}%)")
+            except Exception as e:
+                logger.debug(f"Failed to get GPU {index} utilization: {e}")
                 utilization = 0.0
 
             # Memory

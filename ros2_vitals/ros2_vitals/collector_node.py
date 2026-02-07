@@ -4,6 +4,8 @@ ROS 2 Vitals Collector Node.
 Collects system metrics and publishes them periodically.
 """
 
+import socket
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -16,6 +18,7 @@ from ros2_vitals_msgs.msg import (
     NetworkInterface,
     DiskStatus,
     ProcessStatus,
+    ChildProcessStatus,
 )
 from ros2_vitals_msgs.srv import KillProcess
 
@@ -75,11 +78,15 @@ class VitalsCollectorNode(Node):
         )
         self._publisher = self.create_publisher(SystemStatus, self._topic, qos)
 
-        # Create kill service
+        # Create kill service namespaced by hostname
+        # Service will be at /<hostname>/vitals/kill_process
         if self._enable_kill_service:
+            hostname = socket.gethostname()
+            kill_service_name = f'/{hostname}/vitals/kill_process'
             self._kill_service = self.create_service(
-                KillProcess, '~/kill_process', self._handle_kill_request
+                KillProcess, kill_service_name, self._handle_kill_request
             )
+            self.get_logger().info(f"Kill service available at {kill_service_name}")
 
         # Create timer for periodic publishing
         timer_period = 1.0 / self._publish_rate
@@ -195,9 +202,20 @@ class VitalsCollectorNode(Node):
         proc_msg.status = proc['status']
         proc_msg.create_time = proc['create_time']
 
-        # Add child nodes (recursively)
+        # Add child nodes
         for child in proc.get('child_nodes', []):
-            child_msg = self._create_process_msg(child)
+            child_msg = ChildProcessStatus()
+            child_msg.node_name = child['node_name']
+            child_msg.node_namespace = child['node_namespace']
+            child_msg.pid = child['pid']
+            child_msg.cmdline = child['cmdline']
+            child_msg.cpu_percent = child['cpu_percent']
+            child_msg.ram_bytes = child['ram_bytes']
+            child_msg.gpu_index = child['gpu_index']
+            child_msg.gpu_memory_bytes = child['gpu_memory_bytes']
+            child_msg.disk_read_bytes_per_sec = child['disk_read_bytes_per_sec']
+            child_msg.disk_write_bytes_per_sec = child['disk_write_bytes_per_sec']
+            child_msg.status = child['status']
             proc_msg.child_nodes.append(child_msg)
 
         return proc_msg

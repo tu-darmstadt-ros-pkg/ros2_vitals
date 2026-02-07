@@ -59,7 +59,7 @@ Rectangle {
                 text: status && status.ip_addresses && status.ip_addresses.length > 0
                     ? status.ip_addresses.at(0) : ""
                 font.pixelSize: 11
-                color: palette.mid
+                opacity: 0.7
             }
         }
 
@@ -87,16 +87,16 @@ Rectangle {
 
         // GPU bars (if available)
         Repeater {
-            model: status && status.gpus ? status.gpus : []
+            id: gpuRepeater
+            model: status && status.gpus ? status.gpus.length : 0
 
             ColumnLayout {
                 Layout.fillWidth: true
-                required property var modelData
                 required property int index
                 spacing: 2
 
-                property var gpu: modelData
-                property real memPercent: gpu.memory_total_bytes > 0
+                property var gpu: status.gpus.at(index)
+                property real memPercent: gpu && gpu.memory_total_bytes > 0
                     ? (gpu.memory_used_bytes / gpu.memory_total_bytes) * 100
                     : 0
 
@@ -127,7 +127,7 @@ Rectangle {
             Label {
                 text: "Net:"
                 font.pixelSize: 11
-                color: palette.mid
+                opacity: 0.7
             }
 
             Label {
@@ -165,7 +165,7 @@ Rectangle {
                 visible: status && status.load_avg_1min > 0
                 text: "Load: " + (status ? status.load_avg_1min.toFixed(2) : "")
                 font.pixelSize: 11
-                color: palette.mid
+                opacity: 0.7
             }
         }
 
@@ -178,7 +178,7 @@ Rectangle {
                     ? status.processes.length + " ROS processes"
                     : "No processes"
                 font.pixelSize: 11
-                color: palette.mid
+                opacity: 0.7
             }
 
             Item { Layout.fillWidth: true }
@@ -188,7 +188,7 @@ Rectangle {
                 visible: status && status.uptime_seconds > 0
                 text: "Up: " + formatUptime(status ? status.uptime_seconds : 0)
                 font.pixelSize: 11
-                color: palette.mid
+                opacity: 0.7
             }
         }
     }

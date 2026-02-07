@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 import Ros2
 import RQml.Elements
@@ -24,10 +25,9 @@ Rectangle {
             context.topic = "/vitals/status";
         if (!context.selectedHost)
             context.selectedHost = "";
-        if (!context.sortColumn)
-            context.sortColumn = "cpu";
-        if (context.sortAscending === undefined)
-            context.sortAscending = false;
+        // Always reset to sorting by name ascending on startup
+        context.sortColumn = "name";
+        context.sortAscending = true;
         if (!context.expandedLaunches)
             context.expandedLaunches = {};
     }
@@ -50,12 +50,49 @@ Rectangle {
     // Private Data
     // ========================================================================
 
+    // Process list model - using ListModel to preserve scroll position during updates
+    ListModel {
+        id: processListModel
+    }
+
     QtObject {
         id: d
 
         property var vitalsInterface: VitalsInterface {
             enabled: context.enabled ?? true
             topic: context.topic || "/vitals/status"
+            onDataUpdated: d.updateProcessModel()
+        }
+
+        // Track last update to avoid unnecessary model rebuilds
+        property var lastProcessData: null
+
+        /**
+         * Update the process ListModel with current data.
+         * Uses in-place updates to preserve scroll position.
+         */
+        function updateProcessModel() {
+            const newData = getProcesses();
+
+            // Update model size
+            while (processListModel.count > newData.length) {
+                processListModel.remove(processListModel.count - 1);
+            }
+            while (processListModel.count < newData.length) {
+                processListModel.append({});
+            }
+
+            // Update each item in place
+            for (let i = 0; i < newData.length; i++) {
+                processListModel.set(i, {
+                    proc: newData[i].proc,
+                    isLaunch: newData[i].isLaunch || false,
+                    isChild: newData[i].isChild || false,
+                    launchKey: newData[i].launchKey || "",
+                    expanded: newData[i].expanded || false,
+                    isLast: newData[i].isLast || false
+                });
+            }
         }
 
         /**
@@ -76,8 +113,9 @@ Rectangle {
                 procs.push(status.processes.at(i));
             }
 
-            const col = context.sortColumn || "cpu";
-            const asc = context.sortAscending || false;
+            // Default to name ascending
+            const col = context.sortColumn || "name";
+            const asc = context.sortAscending !== undefined ? context.sortAscending : true;
 
             // Sort function for processes
             function sortProcs(a, b) {
@@ -172,6 +210,8 @@ Rectangle {
             }
             newExpanded[launchKey] = !current;
             context.expandedLaunches = newExpanded;
+            // Immediately update model when expanding/collapsing
+            updateProcessModel();
         }
 
         function formatBytes(bytes) {
@@ -186,6 +226,14 @@ Rectangle {
             if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + " KB/s";
             return (bytesPerSec / (1024 * 1024)).toFixed(1) + " MB/s";
         }
+    }
+
+    // Re-sort when sort settings change
+    Connections {
+        target: context
+        function onSortColumnChanged() { d.updateProcessModel(); }
+        function onSortAscendingChanged() { d.updateProcessModel(); }
+        function onSelectedHostChanged() { d.updateProcessModel(); }
     }
 
     // ========================================================================
@@ -242,10 +290,13 @@ Rectangle {
 
         ScrollView {
             Layout.fillWidth: true
-            Layout.preferredHeight: 180
+            Layout.preferredHeight: hostCardsRow.height + 10
+            Layout.minimumHeight: 170
+            Layout.maximumHeight: 300
             clip: true
 
             Row {
+                id: hostCardsRow
                 spacing: 8
 
                 Repeater {
@@ -256,7 +307,9 @@ Rectangle {
                         required property int index
 
                         width: 300
-                        height: 160
+                        // Dynamic height based on GPU count
+                        property int gpuCount: status && status.gpus ? status.gpus.length : 0
+                        height: 160 + (gpuCount * 76)  // 76px per GPU (2 bars + spacing)
                         status: d.vitalsInterface.hosts[modelData]
                             ? d.vitalsInterface.hosts[modelData].status
                             : null
@@ -325,8 +378,10 @@ Rectangle {
 
                 Component.onCompleted: {
                     // Set initial index without triggering binding loop
+                    // Default to "Name" (index 4) if not set
                     const cols = {"cpu": 0, "ram": 1, "gpu": 2, "disk": 3, "name": 4};
-                    currentIndex = cols[context.sortColumn] || 0;
+                    const col = context.sortColumn || "name";
+                    currentIndex = cols[col] !== undefined ? cols[col] : 4;
                 }
 
                 onActivated: function(index) {
@@ -357,7 +412,8 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 4
                 clip: true
-                model: d.getProcesses()
+                model: processListModel
+                cacheBuffer: 200  // Cache items for smoother scrolling
                 reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
 
@@ -425,19 +481,18 @@ Rectangle {
 
                 delegate: Rectangle {
                     id: delegateRoot
-                    required property var modelData
                     required property int index
-
-                    property var proc: modelData.proc
-                    property bool isLaunch: modelData.isLaunch || false
-                    property bool isChild: modelData.isChild || false
-                    property string launchKey: modelData.launchKey || ""
-                    property bool expanded: modelData.expanded || false
-                    property bool isLast: modelData.isLast || false
+                    // ListModel properties
+                    required property var proc
+                    required property bool isLaunch
+                    required property bool isChild
+                    required property string launchKey
+                    required property bool expanded
+                    required property bool isLast
 
                     width: processListView.width
                     height: 32
-                    color: isLaunch ? Qt.darker(palette.highlight, 2.5)
+                    color: isLaunch ? Qt.rgba(palette.highlight.r, palette.highlight.g, palette.highlight.b, 0.3)
                          : index % 2 === 0 ? palette.base : palette.alternateBase
 
                     RowLayout {
@@ -482,7 +537,7 @@ Rectangle {
                             text: {
                                 if (delegateRoot.isLaunch) {
                                     const childCount = proc.child_nodes ? proc.child_nodes.length : 0;
-                                    return "\uD83D\uDE80 " + (proc.launch_name || proc.node_name) + " (" + childCount + ")";
+                                    return (proc.launch_name || proc.node_name) + " (" + childCount + ")";
                                 }
                                 return proc.node_name || proc.cmdline.split(' ')[0];
                             }
@@ -507,8 +562,8 @@ Rectangle {
                         Label {
                             Layout.preferredWidth: 60
                             text: proc.cpu_percent.toFixed(1) + "%"
-                            color: proc.cpu_percent > thresholds.cpuError ? "#e74c3c"
-                                 : proc.cpu_percent > thresholds.cpuWarning ? "#f39c12"
+                            color: proc.cpu_percent > thresholds.cpuError ? Material.color(Material.Red)
+                                 : proc.cpu_percent > thresholds.cpuWarning ? Material.color(Material.Orange)
                                  : palette.text
                             horizontalAlignment: Text.AlignRight
                         }
@@ -544,19 +599,28 @@ Rectangle {
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 20
                             radius: 3
+                            // Translate Linux process status to user-friendly display
+                            property string displayStatus: {
+                                switch (proc.status) {
+                                    case "sleeping": return "idle";  // More intuitive than "sleeping"
+                                    case "disk-sleep": return "I/O";
+                                    default: return proc.status;
+                                }
+                            }
                             color: {
                                 switch (proc.status) {
-                                    case "running": return "#2ecc7140";
-                                    case "sleeping": return "#3498db40";
-                                    case "zombie": return "#e74c3c40";
-                                    case "stopped": return "#f39c1240";
+                                    case "running": return Qt.rgba(Material.color(Material.Green).r, Material.color(Material.Green).g, Material.color(Material.Green).b, 0.25);
+                                    case "sleeping": return Qt.rgba(Material.color(Material.Blue).r, Material.color(Material.Blue).g, Material.color(Material.Blue).b, 0.25);
+                                    case "disk-sleep": return Qt.rgba(Material.color(Material.Purple).r, Material.color(Material.Purple).g, Material.color(Material.Purple).b, 0.25);
+                                    case "zombie": return Qt.rgba(Material.color(Material.Red).r, Material.color(Material.Red).g, Material.color(Material.Red).b, 0.25);
+                                    case "stopped": return Qt.rgba(Material.color(Material.Orange).r, Material.color(Material.Orange).g, Material.color(Material.Orange).b, 0.25);
                                     default: return palette.mid;
                                 }
                             }
 
                             Label {
                                 anchors.centerIn: parent
-                                text: proc.status
+                                text: parent.displayStatus
                                 font.pixelSize: 10
                             }
                         }
@@ -612,6 +676,48 @@ Rectangle {
     }
 
     // ========================================================================
+    // Kill Service
+    // ========================================================================
+
+    // Kill service client - recreated when host changes
+    property var killServiceClient: {
+        if (!context.selectedHost)
+            return null;
+        return Ros2.createServiceClient(
+            "/" + context.selectedHost + "/vitals/kill_process",
+            "ros2_vitals_msgs/srv/KillProcess"
+        );
+    }
+
+    /**
+     * Call the kill service for the selected host.
+     * Service is at /<hostname>/vitals/kill_process
+     */
+    function callKillService(pid, force) {
+        if (!killServiceClient) {
+            console.warn("No host selected or kill service not available");
+            return;
+        }
+
+        const request = {
+            pid: pid,
+            force: force
+        };
+
+        killServiceClient.sendRequestAsync(request, function(response) {
+            if (!response) {
+                console.warn("Kill service call failed - no response");
+                return;
+            }
+            if (response.success) {
+                console.log("Kill successful:", response.message);
+            } else {
+                console.warn("Kill failed:", response.message);
+            }
+        });
+    }
+
+    // ========================================================================
     // Context Menu
     // ========================================================================
 
@@ -645,8 +751,9 @@ Rectangle {
             text: "Kill Process (SIGTERM)"
             enabled: processContextMenu.processData !== null
             onTriggered: {
-                // TODO: Call kill service
-                console.log("Would kill PID:", processContextMenu.processData.pid);
+                if (processContextMenu.processData) {
+                    root.callKillService(processContextMenu.processData.pid, false);
+                }
             }
         }
 
@@ -654,8 +761,9 @@ Rectangle {
             text: "Force Kill (SIGKILL)"
             enabled: processContextMenu.processData !== null
             onTriggered: {
-                // TODO: Call kill service with force=true
-                console.log("Would force kill PID:", processContextMenu.processData.pid);
+                if (processContextMenu.processData) {
+                    root.callKillService(processContextMenu.processData.pid, true);
+                }
             }
         }
     }
