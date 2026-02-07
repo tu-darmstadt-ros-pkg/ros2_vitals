@@ -1,0 +1,7 @@
+# Kill a process by PID
+
+int32 pid                           # Process ID to kill
+bool force                          # If true, use SIGKILL; otherwise SIGTERM
+---
+bool success                        # Whether the kill signal was sent successfully
+string message                      # Status message or error description

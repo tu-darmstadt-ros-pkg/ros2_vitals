@@ -1,0 +1,662 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Ros2
+import RQml.Elements
+import RQml.Fonts
+import "interfaces"
+import "elements"
+
+/**
+ * System Monitor plugin for visualizing ROS 2 Vitals data.
+ * Shows system metrics for multiple hosts and their ROS processes.
+ */
+Rectangle {
+    id: root
+    anchors.fill: parent
+    property var kddockwidgets_min_size: Qt.size(500, 400)
+    color: palette.base
+
+    Component.onCompleted: {
+        if (context.enabled === undefined)
+            context.enabled = true;
+        if (!context.topic)
+            context.topic = "/vitals/status";
+        if (!context.selectedHost)
+            context.selectedHost = "";
+        if (!context.sortColumn)
+            context.sortColumn = "cpu";
+        if (context.sortAscending === undefined)
+            context.sortAscending = false;
+        if (!context.expandedLaunches)
+            context.expandedLaunches = {};
+    }
+
+    // ========================================================================
+    // Alert Thresholds
+    // ========================================================================
+
+    QtObject {
+        id: thresholds
+        property real cpuWarning: 70
+        property real cpuError: 90
+        property real ramWarning: 75
+        property real ramError: 90
+        property real tempWarning: 75
+        property real tempError: 85
+    }
+
+    // ========================================================================
+    // Private Data
+    // ========================================================================
+
+    QtObject {
+        id: d
+
+        property var vitalsInterface: VitalsInterface {
+            enabled: context.enabled ?? true
+            topic: context.topic || "/vitals/status"
+        }
+
+        /**
+         * Get processes for selected host, sorted and flattened with hierarchy info.
+         * Returns array of objects with: proc, isLaunch, isChild, expanded
+         */
+        function getProcesses() {
+            if (!context.selectedHost || !vitalsInterface.hosts[context.selectedHost])
+                return [];
+
+            const status = vitalsInterface.hosts[context.selectedHost].status;
+            if (!status || !status.processes || status.processes.length === 0)
+                return [];
+
+            // Copy ROS array to JS array using .at() method
+            let procs = [];
+            for (let i = 0; i < status.processes.length; ++i) {
+                procs.push(status.processes.at(i));
+            }
+
+            const col = context.sortColumn || "cpu";
+            const asc = context.sortAscending || false;
+
+            // Sort function for processes
+            function sortProcs(a, b) {
+                let valA, valB;
+                switch (col) {
+                    case "cpu":
+                        valA = a.cpu_percent;
+                        valB = b.cpu_percent;
+                        break;
+                    case "ram":
+                        valA = a.ram_bytes;
+                        valB = b.ram_bytes;
+                        break;
+                    case "gpu":
+                        valA = a.gpu_memory_bytes;
+                        valB = b.gpu_memory_bytes;
+                        break;
+                    case "disk":
+                        valA = a.disk_read_bytes_per_sec + a.disk_write_bytes_per_sec;
+                        valB = b.disk_read_bytes_per_sec + b.disk_write_bytes_per_sec;
+                        break;
+                    case "name":
+                    default:
+                        valA = a.node_name || a.cmdline;
+                        valB = b.node_name || b.cmdline;
+                        return asc
+                            ? valA.localeCompare(valB)
+                            : valB.localeCompare(valA);
+                }
+                return asc ? valA - valB : valB - valA;
+            }
+
+            procs.sort(sortProcs);
+
+            // Build flat list with hierarchy info
+            let result = [];
+            for (let i = 0; i < procs.length; ++i) {
+                const proc = procs[i];
+                const launchKey = proc.pid.toString();
+                const isExpanded = context.expandedLaunches && context.expandedLaunches[launchKey];
+
+                if (proc.is_launch_process) {
+                    // Add launch group header
+                    result.push({
+                        proc: proc,
+                        isLaunch: true,
+                        isChild: false,
+                        launchKey: launchKey,
+                        expanded: isExpanded || false,
+                    });
+
+                    // Add child nodes if expanded
+                    if (isExpanded && proc.child_nodes && proc.child_nodes.length > 0) {
+                        // Copy and sort child nodes
+                        let children = [];
+                        for (let j = 0; j < proc.child_nodes.length; ++j) {
+                            children.push(proc.child_nodes.at(j));
+                        }
+                        children.sort(sortProcs);
+
+                        for (let j = 0; j < children.length; ++j) {
+                            result.push({
+                                proc: children[j],
+                                isLaunch: false,
+                                isChild: true,
+                                launchKey: launchKey,
+                                isLast: j === children.length - 1,
+                            });
+                        }
+                    }
+                } else {
+                    // Standalone process
+                    result.push({
+                        proc: proc,
+                        isLaunch: false,
+                        isChild: false,
+                    });
+                }
+            }
+
+            return result;
+        }
+
+        function toggleLaunchExpanded(launchKey) {
+            if (!context.expandedLaunches)
+                context.expandedLaunches = {};
+            const current = context.expandedLaunches[launchKey] || false;
+            // Create a new object to trigger property change
+            let newExpanded = {};
+            for (let key in context.expandedLaunches) {
+                newExpanded[key] = context.expandedLaunches[key];
+            }
+            newExpanded[launchKey] = !current;
+            context.expandedLaunches = newExpanded;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+        }
+
+        function formatBytesRate(bytesPerSec) {
+            if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + " B/s";
+            if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + " KB/s";
+            return (bytesPerSec / (1024 * 1024)).toFixed(1) + " MB/s";
+        }
+    }
+
+    // ========================================================================
+    // UI Layout
+    // ========================================================================
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 8
+        spacing: 8
+
+        // --------------------------------------------------------------------
+        // Header Row
+        // --------------------------------------------------------------------
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                text: "Topic:"
+            }
+
+            TextField {
+                Layout.fillWidth: true
+                text: context.topic || "/vitals/status"
+                onEditingFinished: context.topic = text
+            }
+
+            IconToggleButton {
+                iconOn: IconFont.iconPause
+                iconOff: IconFont.iconPlay
+                tooltipTextOn: "Click to pause"
+                tooltipTextOff: "Click to resume"
+                checked: context.enabled ?? true
+                onToggled: context.enabled = checked
+            }
+
+            IconButton {
+                text: IconFont.iconTrash
+                tooltipText: "Clear all data"
+                onClicked: d.vitalsInterface.clear()
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Host Cards
+        // --------------------------------------------------------------------
+
+        Label {
+            text: "Hosts (" + d.vitalsInterface.hostCount + ")"
+            font.bold: true
+        }
+
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 180
+            clip: true
+
+            Row {
+                spacing: 8
+
+                Repeater {
+                    model: d.vitalsInterface.hostnames
+
+                    HostCard {
+                        required property string modelData
+                        required property int index
+
+                        width: 300
+                        height: 160
+                        status: d.vitalsInterface.hosts[modelData]
+                            ? d.vitalsInterface.hosts[modelData].status
+                            : null
+                        selected: context.selectedHost === modelData
+                        cpuWarning: thresholds.cpuWarning
+                        cpuError: thresholds.cpuError
+                        ramWarning: thresholds.ramWarning
+                        ramError: thresholds.ramError
+
+                        onClicked: context.selectedHost = modelData
+
+                        Component.onCompleted: {
+                            // Auto-select first host
+                            if (!context.selectedHost && index === 0)
+                                context.selectedHost = modelData;
+                        }
+                    }
+                }
+
+                // Empty state
+                Rectangle {
+                    visible: d.vitalsInterface.hostCount === 0
+                    width: 300
+                    height: 160
+                    color: palette.alternateBase
+                    radius: 6
+                    border.color: palette.mid
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: context.enabled
+                            ? "Waiting for vitals data...\nSubscribed to: " + (context.topic || "/vitals/status")
+                            : "Paused"
+                        horizontalAlignment: Text.AlignHCenter
+                        color: palette.mid
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Process Table Header
+        // --------------------------------------------------------------------
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                text: context.selectedHost
+                    ? "Processes on " + context.selectedHost
+                    : "Select a host"
+                font.bold: true
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Label {
+                text: "Sort:"
+                color: palette.mid
+            }
+
+            ComboBox {
+                id: sortComboBox
+                model: ["CPU", "RAM", "GPU", "Disk", "Name"]
+
+                Component.onCompleted: {
+                    // Set initial index without triggering binding loop
+                    const cols = {"cpu": 0, "ram": 1, "gpu": 2, "disk": 3, "name": 4};
+                    currentIndex = cols[context.sortColumn] || 0;
+                }
+
+                onActivated: function(index) {
+                    const cols = ["cpu", "ram", "gpu", "disk", "name"];
+                    context.sortColumn = cols[index];
+                }
+            }
+
+            Button {
+                text: context.sortAscending ? "↑" : "↓"
+                implicitWidth: 32
+                onClicked: context.sortAscending = !context.sortAscending
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Process Table
+        // --------------------------------------------------------------------
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: palette.alternateBase
+            radius: 4
+
+            ListView {
+                id: processListView
+                anchors.fill: parent
+                anchors.margins: 4
+                clip: true
+                model: d.getProcesses()
+                reuseItems: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: processListView.contentHeight > processListView.height
+                        ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                }
+
+                header: Rectangle {
+                    width: processListView.width
+                    height: 28
+                    color: palette.mid
+                    z: 2
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 20
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 200
+                            text: "Node"
+                            font.bold: true
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 60
+                            text: "CPU"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 80
+                            text: "RAM"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 80
+                            text: "GPU"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 80
+                            text: "Disk I/O"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 60
+                            text: "Status"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignCenter
+                        }
+                    }
+                }
+                headerPositioning: ListView.OverlayHeader
+
+                delegate: Rectangle {
+                    id: delegateRoot
+                    required property var modelData
+                    required property int index
+
+                    property var proc: modelData.proc
+                    property bool isLaunch: modelData.isLaunch || false
+                    property bool isChild: modelData.isChild || false
+                    property string launchKey: modelData.launchKey || ""
+                    property bool expanded: modelData.expanded || false
+                    property bool isLast: modelData.isLast || false
+
+                    width: processListView.width
+                    height: 32
+                    color: isLaunch ? Qt.darker(palette.highlight, 2.5)
+                         : index % 2 === 0 ? palette.base : palette.alternateBase
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 20
+                        spacing: 8
+
+                        // Expand/collapse button for launch processes
+                        Label {
+                            Layout.preferredWidth: 20
+                            visible: delegateRoot.isLaunch
+                            text: delegateRoot.expanded ? "\u25BC" : "\u25B6"  // ▼ or ▶
+                            font.pixelSize: 10
+                            horizontalAlignment: Text.AlignCenter
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: d.toggleLaunchExpanded(delegateRoot.launchKey)
+                            }
+                        }
+
+                        // Tree branch for child nodes
+                        Label {
+                            Layout.preferredWidth: 20
+                            visible: delegateRoot.isChild
+                            text: delegateRoot.isLast ? "\u2514\u2500" : "\u251C\u2500"  // └─ or ├─
+                            font.pixelSize: 11
+                            color: palette.mid
+                        }
+
+                        // Spacer when no icon needed
+                        Item {
+                            Layout.preferredWidth: 20
+                            visible: !delegateRoot.isLaunch && !delegateRoot.isChild
+                        }
+
+                        // Node name
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 180
+                            text: {
+                                if (delegateRoot.isLaunch) {
+                                    const childCount = proc.child_nodes ? proc.child_nodes.length : 0;
+                                    return "\uD83D\uDE80 " + (proc.launch_name || proc.node_name) + " (" + childCount + ")";
+                                }
+                                return proc.node_name || proc.cmdline.split(' ')[0];
+                            }
+                            elide: Text.ElideRight
+                            font.bold: delegateRoot.isLaunch
+
+                            ToolTip.visible: nameMouseArea.containsMouse
+                            ToolTip.text: proc.cmdline
+
+                            MouseArea {
+                                id: nameMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    if (delegateRoot.isLaunch)
+                                        d.toggleLaunchExpanded(delegateRoot.launchKey);
+                                }
+                            }
+                        }
+
+                        // CPU
+                        Label {
+                            Layout.preferredWidth: 60
+                            text: proc.cpu_percent.toFixed(1) + "%"
+                            color: proc.cpu_percent > thresholds.cpuError ? "#e74c3c"
+                                 : proc.cpu_percent > thresholds.cpuWarning ? "#f39c12"
+                                 : palette.text
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // RAM
+                        Label {
+                            Layout.preferredWidth: 80
+                            text: d.formatBytes(proc.ram_bytes)
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // GPU
+                        Label {
+                            Layout.preferredWidth: 80
+                            text: proc.gpu_index >= 0
+                                ? d.formatBytes(proc.gpu_memory_bytes)
+                                : "-"
+                            color: proc.gpu_index >= 0 ? palette.text : palette.mid
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // Disk I/O
+                        Label {
+                            Layout.preferredWidth: 80
+                            property real diskRate: proc.disk_read_bytes_per_sec
+                                + proc.disk_write_bytes_per_sec
+                            text: d.formatBytesRate(diskRate)
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // Status
+                        Rectangle {
+                            Layout.preferredWidth: 60
+                            Layout.preferredHeight: 20
+                            radius: 3
+                            color: {
+                                switch (proc.status) {
+                                    case "running": return "#2ecc7140";
+                                    case "sleeping": return "#3498db40";
+                                    case "zombie": return "#e74c3c40";
+                                    case "stopped": return "#f39c1240";
+                                    default: return palette.mid;
+                                }
+                            }
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: proc.status
+                                font.pixelSize: 10
+                            }
+                        }
+                    }
+
+                    // Context menu
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.RightButton) {
+                                processContextMenu.processData = proc;
+                                processContextMenu.popup();
+                            }
+                        }
+                    }
+                }
+
+                // Empty state
+                Label {
+                    anchors.centerIn: parent
+                    visible: processListView.count === 0 && context.selectedHost
+                    text: "No processes found"
+                    color: palette.mid
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Status Bar
+        // --------------------------------------------------------------------
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                text: "Hosts: " + d.vitalsInterface.hostCount
+                color: palette.mid
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Label {
+                visible: context.selectedHost !== ""
+                property var hostData: d.vitalsInterface.hosts[context.selectedHost]
+                property int procCount: hostData && hostData.status && hostData.status.processes
+                    ? hostData.status.processes.length : 0
+                text: "Processes: " + procCount
+                color: palette.mid
+            }
+        }
+    }
+
+    // ========================================================================
+    // Context Menu
+    // ========================================================================
+
+    Menu {
+        id: processContextMenu
+
+        property var processData: null
+
+        Action {
+            text: "Copy Node Name"
+            enabled: processContextMenu.processData !== null
+            onTriggered: {
+                if (processContextMenu.processData)
+                    RQml.copyTextToClipboard(processContextMenu.processData.node_name
+                        || processContextMenu.processData.cmdline);
+            }
+        }
+
+        Action {
+            text: "Copy PID"
+            enabled: processContextMenu.processData !== null
+            onTriggered: {
+                if (processContextMenu.processData)
+                    RQml.copyTextToClipboard(String(processContextMenu.processData.pid));
+            }
+        }
+
+        MenuSeparator {}
+
+        Action {
+            text: "Kill Process (SIGTERM)"
+            enabled: processContextMenu.processData !== null
+            onTriggered: {
+                // TODO: Call kill service
+                console.log("Would kill PID:", processContextMenu.processData.pid);
+            }
+        }
+
+        Action {
+            text: "Force Kill (SIGKILL)"
+            enabled: processContextMenu.processData !== null
+            onTriggered: {
+                // TODO: Call kill service with force=true
+                console.log("Would force kill PID:", processContextMenu.processData.pid);
+            }
+        }
+    }
+}

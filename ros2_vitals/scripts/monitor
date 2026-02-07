@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""Entry point for vitals terminal monitor."""
+
+from ros2_vitals.terminal_ui.app import main
+
+if __name__ == '__main__':
+    main()

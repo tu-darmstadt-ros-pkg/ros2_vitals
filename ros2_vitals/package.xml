@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ros2_vitals</name>
+  <version>0.1.0</version>
+  <description>
+    Lightweight system monitor for ROS 2 that collects CPU, RAM, GPU, disk, and network
+    statistics for each machine and discovers ROS processes with their resource usage.
+  </description>
+  <maintainer email="todo@example.com">TODO</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>ros2_vitals_msgs</depend>
+
+  <!-- Python dependencies -->
+  <exec_depend>python3-psutil</exec_depend>
+  <!-- pynvml is optional for GPU monitoring -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

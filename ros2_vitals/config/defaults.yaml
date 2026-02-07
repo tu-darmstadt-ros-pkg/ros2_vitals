@@ -1,0 +1,27 @@
+# Default configuration for ros2_vitals collector node
+
+vitals_collector:
+  ros__parameters:
+    # Publishing rate in Hz (1 Hz recommended for low overhead)
+    publish_rate: 1.0
+
+    # Topic to publish status messages
+    topic: "/vitals/status"
+
+    # Enable GPU monitoring (requires pynvml)
+    monitor_gpu: true
+
+    # Enable ROS process discovery
+    monitor_processes: true
+
+    # Enable network interface monitoring
+    monitor_network: true
+
+    # Enable disk usage and I/O monitoring
+    monitor_disk: true
+
+    # Include child process statistics in parent process stats
+    include_children: true
+
+    # Enable kill process service
+    enable_kill_service: true
