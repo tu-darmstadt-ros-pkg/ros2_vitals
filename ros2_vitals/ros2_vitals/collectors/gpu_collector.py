@@ -1,23 +1,27 @@
-"""Collector for NVIDIA GPU statistics via nvidia-ml-py (pynvml)."""
+"""Collector for NVIDIA GPU statistics via nvidia-ml-py."""
 
 from typing import List, Dict, Any, Optional
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
 
-# Try to import pynvml from nvidia-ml-py, but don't fail if not available
-_pynvml_available = False
+# Try to import from nvidia-ml-py, but don't fail if not available
+_nvml_available = False
 _nvml_initialized = False
 
 try:
-    # nvidia-ml-py provides the pynvml module
-    from pynvml import nvmlInit, nvmlShutdown, nvmlDeviceGetCount
-    from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetName
-    from pynvml import nvmlDeviceGetUtilizationRates, nvmlDeviceGetMemoryInfo
-    from pynvml import nvmlDeviceGetTemperature, NVML_TEMPERATURE_GPU
-    from pynvml import nvmlDeviceGetPowerUsage, nvmlDeviceGetFanSpeed
-    from pynvml import nvmlDeviceGetComputeRunningProcesses
-    _pynvml_available = True
+    # Suppress the deprecation warning from pynvml compatibility layer
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        from pynvml import nvmlInit, nvmlShutdown, nvmlDeviceGetCount
+        from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetName
+        from pynvml import nvmlDeviceGetUtilizationRates, nvmlDeviceGetMemoryInfo
+        from pynvml import nvmlDeviceGetTemperature, NVML_TEMPERATURE_GPU
+        from pynvml import nvmlDeviceGetPowerUsage, nvmlDeviceGetFanSpeed
+        from pynvml import nvmlDeviceGetComputeRunningProcesses
+        from pynvml import nvmlDeviceGetGraphicsRunningProcesses
+    _nvml_available = True
 except ImportError:
     pass
 
@@ -39,7 +43,7 @@ class GpuCollector:
         """Initialize NVML library."""
         global _nvml_initialized
 
-        if not _pynvml_available:
+        if not _nvml_available:
             logger.debug("nvidia-ml-py not installed, GPU monitoring disabled")
             return
 
@@ -169,14 +173,19 @@ class GpuCollector:
         for i in range(self._device_count):
             try:
                 handle = nvmlDeviceGetHandleByIndex(i)
-                processes = nvmlDeviceGetComputeRunningProcesses(handle)
-
-                for proc in processes:
-                    if proc.pid == pid:
-                        return {
-                            'gpu_index': i,
-                            'memory_bytes': proc.usedGpuMemory or 0,
-                        }
+                # Check both compute and graphics processes
+                for get_procs in (nvmlDeviceGetComputeRunningProcesses,
+                                  nvmlDeviceGetGraphicsRunningProcesses):
+                    try:
+                        processes = get_procs(handle)
+                        for proc in processes:
+                            if proc.pid == pid:
+                                return {
+                                    'gpu_index': i,
+                                    'memory_bytes': proc.usedGpuMemory or 0,
+                                }
+                    except Exception:
+                        continue
             except Exception:
                 continue
 
@@ -185,7 +194,7 @@ class GpuCollector:
     def shutdown(self):
         """Shutdown NVML library."""
         global _nvml_initialized
-        if _nvml_initialized and _pynvml_available:
+        if _nvml_initialized and _nvml_available:
             try:
                 nvmlShutdown()
                 _nvml_initialized = False

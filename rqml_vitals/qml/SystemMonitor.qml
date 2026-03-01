@@ -463,8 +463,22 @@ Rectangle {
                         }
 
                         Label {
-                            Layout.preferredWidth: 80
+                            Layout.preferredWidth: 70
                             text: "Disk I/O"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 70
+                            text: "Net In"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 70
+                            text: "Net Out"
                             font.bold: true
                             horizontalAlignment: Text.AlignRight
                         }
@@ -587,10 +601,26 @@ Rectangle {
 
                         // Disk I/O
                         Label {
-                            Layout.preferredWidth: 80
+                            Layout.preferredWidth: 70
                             property real diskRate: proc.disk_read_bytes_per_sec
                                 + proc.disk_write_bytes_per_sec
                             text: d.formatBytesRate(diskRate)
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // Network In
+                        Label {
+                            Layout.preferredWidth: 70
+                            text: d.formatBytesRate(proc.net_rx_bytes_per_sec || 0)
+                            color: (proc.net_rx_bytes_per_sec || 0) > 0 ? palette.text : palette.mid
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // Network Out
+                        Label {
+                            Layout.preferredWidth: 70
+                            text: d.formatBytesRate(proc.net_tx_bytes_per_sec || 0)
+                            color: (proc.net_tx_bytes_per_sec || 0) > 0 ? palette.text : palette.mid
                             horizontalAlignment: Text.AlignRight
                         }
 

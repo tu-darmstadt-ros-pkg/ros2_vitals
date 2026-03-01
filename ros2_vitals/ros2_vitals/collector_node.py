@@ -5,6 +5,7 @@ Collects system metrics and publishes them periodically.
 """
 
 import socket
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -28,6 +29,7 @@ from .collectors import (
     NetworkCollector,
     DiskCollector,
     ProcessCollector,
+    TcpStatsCollector,
 )
 
 
@@ -66,8 +68,10 @@ class VitalsCollectorNode(Node):
         self._gpu_collector = GpuCollector() if self._monitor_gpu else None
         self._network_collector = NetworkCollector() if self._monitor_network else None
         self._disk_collector = DiskCollector() if self._monitor_disk else None
+        self._tcp_stats_collector = TcpStatsCollector() if self._monitor_processes else None
         self._process_collector = (
-            ProcessCollector(self._gpu_collector) if self._monitor_processes else None
+            ProcessCollector(self._gpu_collector, self._tcp_stats_collector)
+            if self._monitor_processes else None
         )
 
         # Create publisher with reliable QoS
@@ -88,6 +92,10 @@ class VitalsCollectorNode(Node):
             )
             self.get_logger().info(f"Kill service available at {kill_service_name}")
 
+        # Timing instrumentation
+        self._timing_cycle_count = 0
+        self._timing_log_interval = 10  # Log every 10 cycles
+
         # Create timer for periodic publishing
         timer_period = 1.0 / self._publish_rate
         self._timer = self.create_timer(timer_period, self._publish_status)
@@ -100,11 +108,14 @@ class VitalsCollectorNode(Node):
 
     def _publish_status(self):
         """Collect and publish system status."""
+        timings = {}
         msg = SystemStatus()
         msg.stamp = self.get_clock().now().to_msg()
 
         # System metrics
+        t0 = time.perf_counter()
         system = self._system_collector.collect_all()
+        timings['system'] = time.perf_counter() - t0
         msg.hostname = system['hostname']
         msg.ip_addresses = system['ip_addresses']
         msg.cpu_percent = system['cpu_percent']
@@ -122,6 +133,7 @@ class VitalsCollectorNode(Node):
         msg.uptime_seconds = system['uptime_seconds']
 
         # GPU metrics
+        t0 = time.perf_counter()
         if self._gpu_collector:
             for gpu in self._gpu_collector.get_gpus():
                 gpu_msg = GpuStatus()
@@ -134,8 +146,10 @@ class VitalsCollectorNode(Node):
                 gpu_msg.power_watts = gpu['power_watts']
                 gpu_msg.fan_speed_percent = gpu['fan_speed_percent']
                 msg.gpus.append(gpu_msg)
+        timings['gpu'] = time.perf_counter() - t0
 
         # Network metrics
+        t0 = time.perf_counter()
         if self._network_collector:
             for iface in self._network_collector.get_interfaces():
                 net_msg = NetworkInterface()
@@ -152,8 +166,10 @@ class VitalsCollectorNode(Node):
                 net_msg.bytes_sent_per_sec = iface['bytes_sent_per_sec']
                 net_msg.bytes_recv_per_sec = iface['bytes_recv_per_sec']
                 msg.network_interfaces.append(net_msg)
+        timings['network'] = time.perf_counter() - t0
 
         # Disk metrics
+        t0 = time.perf_counter()
         if self._disk_collector:
             for disk in self._disk_collector.get_partitions():
                 disk_msg = DiskStatus()
@@ -167,14 +183,42 @@ class VitalsCollectorNode(Node):
                 disk_msg.read_bytes_per_sec = disk['read_bytes_per_sec']
                 disk_msg.write_bytes_per_sec = disk['write_bytes_per_sec']
                 msg.disks.append(disk_msg)
+        timings['disk'] = time.perf_counter() - t0
 
         # Process metrics
+        t0 = time.perf_counter()
         if self._process_collector:
             for proc in self._process_collector.get_processes(self._include_children):
                 proc_msg = self._create_process_msg(proc)
                 msg.processes.append(proc_msg)
+        timings['process'] = time.perf_counter() - t0
 
+        # Publish
+        t0 = time.perf_counter()
         self._publisher.publish(msg)
+        timings['publish'] = time.perf_counter() - t0
+
+        timings['total'] = sum(timings.values())
+
+        # Log timing periodically
+        self._timing_cycle_count += 1
+        if self._timing_cycle_count % self._timing_log_interval == 0:
+            formatted = {k: f"{v*1000:.1f}ms" for k, v in timings.items()}
+            self.get_logger().info(f"Collector timings: {formatted}")
+
+            # Log sub-timings for the expensive collectors
+            if hasattr(self._system_collector, '_sub_timings'):
+                sub = {k: f"{v*1000:.1f}ms" for k, v in self._system_collector._sub_timings.items()}
+                self.get_logger().info(f"  system breakdown: {sub}")
+            if self._process_collector and hasattr(self._process_collector, '_sub_timings'):
+                sub = self._process_collector._sub_timings
+                formatted_sub = {}
+                for k, v in sub.items():
+                    if isinstance(v, float):
+                        formatted_sub[k] = f"{v*1000:.1f}ms"
+                    else:
+                        formatted_sub[k] = str(v)
+                self.get_logger().info(f"  process breakdown: {formatted_sub}")
 
     def _create_process_msg(self, proc: dict) -> ProcessStatus:
         """Create a ProcessStatus message from process data dict."""
@@ -196,6 +240,8 @@ class VitalsCollectorNode(Node):
         proc_msg.disk_write_bytes_total = proc['disk_write_bytes_total']
         proc_msg.disk_read_bytes_per_sec = proc['disk_read_bytes_per_sec']
         proc_msg.disk_write_bytes_per_sec = proc['disk_write_bytes_per_sec']
+        proc_msg.net_rx_bytes_per_sec = proc.get('net_rx_bytes_per_sec', 0.0)
+        proc_msg.net_tx_bytes_per_sec = proc.get('net_tx_bytes_per_sec', 0.0)
         proc_msg.open_files_count = proc['open_files_count']
         proc_msg.network_connections_count = proc['network_connections_count']
         proc_msg.num_threads = proc['num_threads']
@@ -215,6 +261,8 @@ class VitalsCollectorNode(Node):
             child_msg.gpu_memory_bytes = child['gpu_memory_bytes']
             child_msg.disk_read_bytes_per_sec = child['disk_read_bytes_per_sec']
             child_msg.disk_write_bytes_per_sec = child['disk_write_bytes_per_sec']
+            child_msg.net_rx_bytes_per_sec = child.get('net_rx_bytes_per_sec', 0.0)
+            child_msg.net_tx_bytes_per_sec = child.get('net_tx_bytes_per_sec', 0.0)
             child_msg.status = child['status']
             proc_msg.child_nodes.append(child_msg)
 

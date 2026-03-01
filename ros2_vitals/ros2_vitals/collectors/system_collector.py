@@ -2,7 +2,8 @@
 
 import os
 import socket
-from typing import List, Tuple
+import time
+from typing import Dict, List, Tuple
 
 import psutil
 
@@ -17,9 +18,9 @@ class SystemCollector:
         self._hostname = socket.gethostname()
         self._ip_addresses = None
         self._ip_cache_time = 0
-        # Temperature sensor name cache (avoid re-probing)
-        self._temp_sensor_name = None
-        self._temp_checked = False
+        # Temperature: cache the sysfs file path after first probe
+        self._temp_sysfs_path = None  # Direct path to temp file, e.g. /sys/class/hwmon/hwmon3/temp1_input
+        self._temp_probed = False
 
     def get_hostname(self) -> str:
         """Get the system hostname (cached)."""
@@ -84,49 +85,73 @@ class SystemCollector:
         """
         Get CPU temperature in Celsius.
 
+        On first call, uses psutil to discover the right sensor and caches the
+        sysfs file path. Subsequent calls read the file directly (~0.1ms vs ~25ms).
+
         Returns:
             Temperature in Celsius, or -1.0 if unavailable
         """
-        try:
-            # Use cached sensor name if already found
-            if self._temp_checked and self._temp_sensor_name is None:
+        # Fast path: read cached sysfs file directly
+        if self._temp_probed:
+            if self._temp_sysfs_path is None:
+                return -1.0
+            try:
+                with open(self._temp_sysfs_path, 'r') as f:
+                    # sysfs temp files contain millidegrees
+                    return int(f.read().strip()) / 1000.0
+            except (IOError, ValueError):
                 return -1.0
 
+        # First call: probe via psutil to find the right sensor
+        self._temp_probed = True
+        try:
             temps = psutil.sensors_temperatures()
             if not temps:
-                self._temp_checked = True
-                self._temp_sensor_name = None
                 return -1.0
 
-            # If we already know the sensor name, use it directly
-            if self._temp_sensor_name and self._temp_sensor_name in temps:
-                entries = temps[self._temp_sensor_name]
-                if entries:
-                    return entries[0].current
-
-            # Try common sensor names
+            # Find the right sensor entry
+            sensor_name = None
             for name in ['coretemp', 'cpu_thermal', 'k10temp', 'zenpower', 'acpitz']:
-                if name in temps:
-                    entries = temps[name]
+                if name in temps and temps[name]:
+                    sensor_name = name
+                    break
+            if sensor_name is None:
+                # Fallback: first available
+                for name, entries in temps.items():
                     if entries:
-                        self._temp_sensor_name = name
-                        self._temp_checked = True
-                        return entries[0].current
+                        sensor_name = name
+                        break
 
-            # Fallback: return first available temperature
-            for name, entries in temps.items():
-                if entries:
-                    self._temp_sensor_name = name
-                    self._temp_checked = True
-                    return entries[0].current
+            if sensor_name is None:
+                return -1.0
 
-            self._temp_checked = True
-            self._temp_sensor_name = None
+            # Find the sysfs path for this sensor
+            # psutil stores it in the shwtemp named tuple's internal attributes
+            # but we can find it by scanning /sys/class/hwmon/
+            temp_value = temps[sensor_name][0].current
+            self._temp_sysfs_path = self._find_temp_sysfs_path(sensor_name)
+            return temp_value
+
+        except (AttributeError, KeyError, Exception):
             return -1.0
-        except (AttributeError, KeyError):
-            self._temp_checked = True
-            self._temp_sensor_name = None
-            return -1.0
+
+    def _find_temp_sysfs_path(self, sensor_name: str) -> str:
+        """Find the sysfs file path for a temperature sensor by name."""
+        import glob
+        hwmon_dirs = glob.glob('/sys/class/hwmon/hwmon*')
+        for hwmon_dir in hwmon_dirs:
+            try:
+                name_file = os.path.join(hwmon_dir, 'name')
+                with open(name_file, 'r') as f:
+                    name = f.read().strip()
+                if name == sensor_name:
+                    # Return the first temp input file
+                    temp_file = os.path.join(hwmon_dir, 'temp1_input')
+                    if os.path.exists(temp_file):
+                        return temp_file
+            except (IOError, OSError):
+                continue
+        return None
 
     def get_uptime(self) -> float:
         """Get system uptime in seconds."""
@@ -140,16 +165,37 @@ class SystemCollector:
         Returns:
             Dictionary with all system metrics
         """
+        self._sub_timings = {}
+
+        t0 = time.perf_counter()
         ram_total, ram_used, ram_available = self.get_memory()
         swap_total, swap_used = self.get_swap()
+        self._sub_timings['mem+swap'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         load_1, load_5, load_15 = self.get_load_average()
+        self._sub_timings['load'] = time.perf_counter() - t0
+
+        # Single CPU measurement: per-core values, derive overall from them
+        t0 = time.perf_counter()
+        cpu_per_core = self.get_cpu_per_core()
+        cpu_overall = sum(cpu_per_core) / len(cpu_per_core) if cpu_per_core else 0.0
+        self._sub_timings['cpu'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        cpu_temp = self.get_cpu_temperature()
+        self._sub_timings['temp'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        uptime = self.get_uptime()
+        self._sub_timings['uptime'] = time.perf_counter() - t0
 
         return {
             'hostname': self.get_hostname(),
             'ip_addresses': self.get_ip_addresses(),
-            'cpu_percent': self.get_cpu_percent(),
+            'cpu_percent': cpu_overall,
             'cpu_count': self.get_cpu_count(),
-            'cpu_per_core': self.get_cpu_per_core(),
+            'cpu_per_core': cpu_per_core,
             'load_avg_1min': load_1,
             'load_avg_5min': load_5,
             'load_avg_15min': load_15,
@@ -158,6 +204,6 @@ class SystemCollector:
             'ram_available_bytes': ram_available,
             'swap_total_bytes': swap_total,
             'swap_used_bytes': swap_used,
-            'cpu_temperature_celsius': self.get_cpu_temperature(),
-            'uptime_seconds': self.get_uptime(),
+            'cpu_temperature_celsius': cpu_temp,
+            'uptime_seconds': uptime,
         }

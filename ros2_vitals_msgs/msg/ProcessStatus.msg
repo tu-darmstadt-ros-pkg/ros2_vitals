@@ -28,6 +28,10 @@ uint64 disk_write_bytes_total       # Total bytes written to disk
 float32 disk_read_bytes_per_sec     # Current read rate
 float32 disk_write_bytes_per_sec    # Current write rate
 
+# Network I/O (TCP traffic rates, includes children)
+float32 net_rx_bytes_per_sec        # Incoming TCP traffic rate
+float32 net_tx_bytes_per_sec        # Outgoing TCP traffic rate
+
 # Resources
 uint32 open_files_count             # Number of open file descriptors
 uint32 network_connections_count    # Number of active network connections

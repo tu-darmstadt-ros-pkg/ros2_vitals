@@ -18,5 +18,9 @@ uint64 gpu_memory_bytes             # GPU memory used by this process
 float32 disk_read_bytes_per_sec     # Current read rate
 float32 disk_write_bytes_per_sec    # Current write rate
 
+# Network I/O (TCP traffic rates)
+float32 net_rx_bytes_per_sec        # Incoming TCP traffic rate
+float32 net_tx_bytes_per_sec        # Outgoing TCP traffic rate
+
 # Status
 string status                       # Process status

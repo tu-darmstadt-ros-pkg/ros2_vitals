@@ -52,6 +52,7 @@ Each machine runs a `vitals_collector` node that publishes to `/vitals/status`. 
 ### Process Discovery
 - Automatic discovery of ROS 2 processes (no code changes required)
 - Per-process CPU, RAM, disk I/O
+- Per-process network I/O (TCP only, via `ss` command)
 - Per-process GPU memory usage
 - Child process aggregation (for component containers)
 - Docker container detection
@@ -136,17 +137,10 @@ Parameters can be set in the config file or via launch arguments:
 Complete status for one host including all metrics.
 
 ### ProcessStatus.msg
-Per-process statistics including CPU, RAM, GPU memory, and disk I/O.
+Per-process statistics including CPU, RAM, GPU memory, disk I/O, and network I/O (TCP only).
 
 ### KillProcess.srv
 Service to terminate a process by PID.
-
-## Future Improvements
-
-- [ ] **Per-process network I/O**: Currently not implemented due to complexity (would require packet capture). System-wide network stats are available instead.
-- [ ] AMD GPU support via rocm-smi
-- [ ] Process filtering options
-- [ ] Historical data storage
 
 ## License
 

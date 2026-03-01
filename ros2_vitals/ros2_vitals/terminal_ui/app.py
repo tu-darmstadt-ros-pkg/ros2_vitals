@@ -369,6 +369,8 @@ class TerminalUI:
                         'gpu_index': proc.gpu_index,
                         'gpu_mem': proc.gpu_memory_bytes,
                         'disk_rate': proc.disk_read_bytes_per_sec + proc.disk_write_bytes_per_sec,
+                        'net_rx': proc.net_rx_bytes_per_sec,
+                        'net_tx': proc.net_tx_bytes_per_sec,
                         'child_count': len(proc.child_nodes),
                     })
                     # Add child nodes
@@ -381,6 +383,8 @@ class TerminalUI:
                             'gpu_index': child.gpu_index,
                             'gpu_mem': child.gpu_memory_bytes,
                             'disk_rate': child.disk_read_bytes_per_sec + child.disk_write_bytes_per_sec,
+                            'net_rx': child.net_rx_bytes_per_sec,
+                            'net_tx': child.net_tx_bytes_per_sec,
                             'parent': proc.launch_name or proc.node_name,
                         })
                 else:
@@ -393,6 +397,8 @@ class TerminalUI:
                         'gpu_index': proc.gpu_index,
                         'gpu_mem': proc.gpu_memory_bytes,
                         'disk_rate': proc.disk_read_bytes_per_sec + proc.disk_write_bytes_per_sec,
+                        'net_rx': proc.net_rx_bytes_per_sec,
+                        'net_tx': proc.net_tx_bytes_per_sec,
                     })
 
         # Clamp selection to valid range
@@ -414,7 +420,7 @@ class TerminalUI:
 
         # Column header
         try:
-            header = f"{'Node':<40} {'CPU':>7} {'RAM':>10} {'GPU':>10} {'Disk':>12}"
+            header = f"{'Node':<35} {'CPU':>6} {'RAM':>9} {'GPU':>9} {'Disk':>10} {'Net In':>9} {'Net Out':>9}"
             stdscr.addstr(row, 4, header[:width-6], curses.A_DIM)
         except curses.error:
             pass
@@ -450,16 +456,19 @@ class TerminalUI:
                 attr_extra = 0
 
             # Truncate name based on available width
-            max_name_len = min(38, width - 50)
+            max_name_len = min(33, width - 70)
             if len(node_name) > max_name_len:
                 node_name = node_name[:max_name_len-3] + "..."
 
             gpu_str = format_bytes(proc['gpu_mem']) if proc['gpu_index'] >= 0 else "-"
+            net_rx = proc.get('net_rx', 0.0)
+            net_tx = proc.get('net_tx', 0.0)
 
             try:
-                line = (f"{node_name:<40} {proc['cpu']:6.1f}% "
-                        f"{format_bytes(proc['ram']):>10} {gpu_str:>10} "
-                        f"{format_bytes_rate(proc['disk_rate']):>12}")
+                line = (f"{node_name:<35} {proc['cpu']:5.1f}% "
+                        f"{format_bytes(proc['ram']):>9} {gpu_str:>9} "
+                        f"{format_bytes_rate(proc['disk_rate']):>10} "
+                        f"{format_bytes_rate(net_rx):>9} {format_bytes_rate(net_tx):>9}")
 
                 # Truncate line to fit width
                 line = line[:width-6]
