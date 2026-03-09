@@ -11,6 +11,8 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/collector
   scripts/monitor
+  scripts/daemon
+  scripts/bridge
   DESTINATION lib/${PROJECT_NAME}
 )
 

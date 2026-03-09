@@ -25,3 +25,6 @@ vitals_collector:
 
     # Enable kill process service
     enable_kill_service: true
+
+    # Unix socket path to connect to vitals-daemon (bridge mode only)
+    socket_path: "/run/vitals/collector.sock"

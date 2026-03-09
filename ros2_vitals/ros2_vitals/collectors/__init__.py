@@ -4,7 +4,7 @@ from .gpu_collector import GpuCollector
 from .network_collector import NetworkCollector
 from .disk_collector import DiskCollector
 from .process_collector import ProcessCollector
-from .tcp_stats_collector import TcpStatsCollector
+from .net_stats_collector import NetStatsCollector
 
 __all__ = [
     'SystemCollector',
@@ -12,5 +12,5 @@ __all__ = [
     'NetworkCollector',
     'DiskCollector',
     'ProcessCollector',
-    'TcpStatsCollector',
+    'NetStatsCollector',
 ]

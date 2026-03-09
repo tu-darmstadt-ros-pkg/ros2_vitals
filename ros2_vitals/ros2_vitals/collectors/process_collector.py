@@ -10,7 +10,7 @@ import psutil
 
 from ..utils.rate_calculator import RateCalculator
 from .gpu_collector import GpuCollector
-from .tcp_stats_collector import TcpStatsCollector
+from .net_stats_collector import NetStatsCollector
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,10 @@ class ProcessCollector:
     """
 
     def __init__(self, gpu_collector: Optional[GpuCollector] = None,
-                 tcp_stats_collector: Optional[TcpStatsCollector] = None):
+                 net_stats_collector: Optional[NetStatsCollector] = None):
         self._rate_calc = RateCalculator()
         self._gpu_collector = gpu_collector
-        self._tcp_stats_collector = tcp_stats_collector
+        self._net_stats_collector = net_stats_collector
         # Cache Process objects to enable proper cpu_percent() tracking
         # cpu_percent() needs to be called on the same Process object over time
         self._process_cache: Dict[int, psutil.Process] = {}
@@ -56,8 +56,8 @@ class ProcessCollector:
         self._namespace_cache: Dict[int, str] = {}
         # Cache GPU process memory (updated once per cycle, not per process)
         self._gpu_process_cache: Dict[int, Dict[str, Any]] = {}
-        # Cache TCP stats (updated once per cycle)
-        self._tcp_stats_cache: Dict[int, Dict[str, float]] = {}
+        # Cache network stats (updated once per cycle)
+        self._net_stats_cache: Dict[int, Dict[str, float]] = {}
         # Cache ROS process identification: pid -> True (is ROS) or False (not ROS)
         # Avoids re-reading /proc/<pid>/cmdline for known non-ROS processes
         self._ros_pid_cache: Dict[int, bool] = {}
@@ -85,10 +85,10 @@ class ProcessCollector:
         self._refresh_gpu_process_cache()
         self._sub_timings['gpu_cache'] = time.perf_counter() - t0
 
-        # Refresh TCP stats cache once per cycle (expensive ss command)
+        # Refresh network stats cache once per cycle
         t0 = time.perf_counter()
-        self._refresh_tcp_stats_cache()
-        self._sub_timings['tcp_ss'] = time.perf_counter() - t0
+        self._refresh_net_stats_cache()
+        self._sub_timings['net_stats'] = time.perf_counter() - t0
 
         # Decide if this is a full discovery cycle or a fast stats-only cycle.
         # Full discovery reads cmdline for all processes (expensive).
@@ -279,17 +279,17 @@ class ProcessCollector:
         """Get GPU memory from cache (O(1) lookup instead of O(n*m))."""
         return self._gpu_process_cache.get(pid)
 
-    def _refresh_tcp_stats_cache(self):
-        """Refresh TCP stats cache (called once per collection cycle)."""
-        self._tcp_stats_cache.clear()
-        if not self._tcp_stats_collector or not self._tcp_stats_collector.available:
+    def _refresh_net_stats_cache(self):
+        """Refresh network stats cache (called once per collection cycle)."""
+        self._net_stats_cache.clear()
+        if not self._net_stats_collector or not self._net_stats_collector.available:
             return
-        self._tcp_stats_collector.refresh()
-        self._tcp_stats_cache = self._tcp_stats_collector._last_stats
+        self._net_stats_collector.refresh()
+        self._net_stats_cache = self._net_stats_collector._last_stats
 
-    def _get_process_tcp_stats(self, pid: int, child_pids: Optional[List[int]] = None) -> Dict[str, float]:
+    def _get_process_net_stats(self, pid: int, child_pids: Optional[List[int]] = None) -> Dict[str, float]:
         """
-        Get TCP stats for a process, aggregating stats from child processes.
+        Get network stats for a process, aggregating stats from child processes.
 
         The ss command may report the socket as owned by either the parent or
         a child process, so we check all PIDs in the process tree.
@@ -298,16 +298,16 @@ class ProcessCollector:
         tx_rate = 0.0
 
         # Check main PID
-        if pid in self._tcp_stats_cache:
-            stats = self._tcp_stats_cache[pid]
+        if pid in self._net_stats_cache:
+            stats = self._net_stats_cache[pid]
             rx_rate += stats.get('rx_bytes_per_sec', 0.0)
             tx_rate += stats.get('tx_bytes_per_sec', 0.0)
 
         # Check child PIDs (TCP socket might be owned by a child process)
         if child_pids:
             for child_pid in child_pids:
-                if child_pid in self._tcp_stats_cache:
-                    stats = self._tcp_stats_cache[child_pid]
+                if child_pid in self._net_stats_cache:
+                    stats = self._net_stats_cache[child_pid]
                     rx_rate += stats.get('rx_bytes_per_sec', 0.0)
                     tx_rate += stats.get('tx_bytes_per_sec', 0.0)
 
@@ -444,10 +444,10 @@ class ProcessCollector:
             if include_children:
                 self._aggregate_children(proc, info, children_by_ppid)
 
-            # TCP stats - get after children are known so we can aggregate all PIDs
-            tcp_stats = self._get_process_tcp_stats(pid, info.get('child_pids', []))
-            info['net_rx_bytes_per_sec'] = tcp_stats['rx_bytes_per_sec']
-            info['net_tx_bytes_per_sec'] = tcp_stats['tx_bytes_per_sec']
+            # Network stats - get after children are known so we can aggregate all PIDs
+            net_stats = self._get_process_net_stats(pid, info.get('child_pids', []))
+            info['net_rx_bytes_per_sec'] = net_stats['rx_bytes_per_sec']
+            info['net_tx_bytes_per_sec'] = net_stats['tx_bytes_per_sec']
 
             return info
 
@@ -549,8 +549,8 @@ class ProcessCollector:
                             if node_name:
                                 if child_pid not in self._namespace_cache:
                                     self._namespace_cache[child_pid] = self._extract_namespace_from_cmdline(child_cmdline)
-                                # Get TCP stats for this child
-                                child_tcp_stats = self._get_process_tcp_stats(child_pid)
+                                # Get network stats for this child
+                                child_net_stats = self._get_process_net_stats(child_pid)
                                 child_node_info = {
                                     'pid': child_pid,
                                     'cmdline': child_cmdline[:500],
@@ -571,8 +571,8 @@ class ProcessCollector:
                                     'disk_write_bytes_total': 0,
                                     'disk_read_bytes_per_sec': child_disk_read_rate,
                                     'disk_write_bytes_per_sec': child_disk_write_rate,
-                                    'net_rx_bytes_per_sec': child_tcp_stats['rx_bytes_per_sec'],
-                                    'net_tx_bytes_per_sec': child_tcp_stats['tx_bytes_per_sec'],
+                                    'net_rx_bytes_per_sec': child_net_stats['rx_bytes_per_sec'],
+                                    'net_tx_bytes_per_sec': child_net_stats['tx_bytes_per_sec'],
                                     'open_files_count': 0,
                                     'network_connections_count': 0,
                                     'gpu_index': child_gpu_index,
@@ -645,6 +645,11 @@ class ProcessCollector:
         shell_name = self._extract_shell_command_name(cmdline)
         if shell_name:
             return shell_name
+
+        # Handle python3 -m <module> (e.g. "sudo python3 -m ros2_vitals.daemon")
+        for i, arg in enumerate(cmdline):
+            if arg == '-m' and i + 1 < len(cmdline):
+                return cmdline[i + 1]
 
         # Check for common ROS 2 executables
         for arg in cmdline:

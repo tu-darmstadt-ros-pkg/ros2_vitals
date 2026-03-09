@@ -137,6 +137,14 @@ Rectangle {
                         valA = a.disk_read_bytes_per_sec + a.disk_write_bytes_per_sec;
                         valB = b.disk_read_bytes_per_sec + b.disk_write_bytes_per_sec;
                         break;
+                    case "net_in":
+                        valA = a.net_rx_bytes_per_sec || 0;
+                        valB = b.net_rx_bytes_per_sec || 0;
+                        break;
+                    case "net_out":
+                        valA = a.net_tx_bytes_per_sec || 0;
+                        valB = b.net_tx_bytes_per_sec || 0;
+                        break;
                     case "name":
                     default:
                         valA = a.node_name || a.cmdline;
@@ -354,47 +362,12 @@ Rectangle {
         // Process Table Header
         // --------------------------------------------------------------------
 
-        RowLayout {
+        Label {
             Layout.fillWidth: true
-            spacing: 8
-
-            Label {
-                text: context.selectedHost
-                    ? "Processes on " + context.selectedHost
-                    : "Select a host"
-                font.bold: true
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Label {
-                text: "Sort:"
-                color: palette.mid
-            }
-
-            ComboBox {
-                id: sortComboBox
-                model: ["CPU", "RAM", "GPU", "Disk", "Name"]
-
-                Component.onCompleted: {
-                    // Set initial index without triggering binding loop
-                    // Default to "Name" (index 4) if not set
-                    const cols = {"cpu": 0, "ram": 1, "gpu": 2, "disk": 3, "name": 4};
-                    const col = context.sortColumn || "name";
-                    currentIndex = cols[col] !== undefined ? cols[col] : 4;
-                }
-
-                onActivated: function(index) {
-                    const cols = ["cpu", "ram", "gpu", "disk", "name"];
-                    context.sortColumn = cols[index];
-                }
-            }
-
-            Button {
-                text: context.sortAscending ? "↑" : "↓"
-                implicitWidth: 32
-                onClicked: context.sortAscending = !context.sortAscending
-            }
+            text: context.selectedHost
+                ? "Processes on " + context.selectedHost
+                : "Select a host"
+            font.bold: true
         }
 
         // --------------------------------------------------------------------
@@ -423,10 +396,27 @@ Rectangle {
                 }
 
                 header: Rectangle {
+                    id: tableHeader
                     width: processListView.width
                     height: 28
                     color: palette.mid
                     z: 2
+
+                    // Helper: sort arrow for active column
+                    function sortArrow(columnId) {
+                        if ((context.sortColumn || "name") !== columnId) return "";
+                        return context.sortAscending ? " \u2191" : " \u2193";
+                    }
+
+                    // Helper: click handler for header columns
+                    function headerClicked(columnId) {
+                        if ((context.sortColumn || "name") === columnId) {
+                            context.sortAscending = !context.sortAscending;
+                        } else {
+                            context.sortColumn = columnId;
+                            context.sortAscending = columnId === "name";  // Name defaults asc, others desc
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -437,57 +427,104 @@ Rectangle {
                         Label {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 200
-                            text: "Node"
-                            font.bold: true
+                            text: "Node" + tableHeader.sortArrow("name")
+                            font.bold: (context.sortColumn || "name") === "name"
+                            opacity: (context.sortColumn || "name") === "name" ? 1.0 : 0.7
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("name")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 60
-                            text: "CPU"
-                            font.bold: true
+                            text: "CPU" + tableHeader.sortArrow("cpu")
+                            font.bold: context.sortColumn === "cpu"
+                            opacity: context.sortColumn === "cpu" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("cpu")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 80
-                            text: "RAM"
-                            font.bold: true
+                            text: "RAM" + tableHeader.sortArrow("ram")
+                            font.bold: context.sortColumn === "ram"
+                            opacity: context.sortColumn === "ram" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("ram")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 80
-                            text: "GPU"
-                            font.bold: true
+                            text: "GPU" + tableHeader.sortArrow("gpu")
+                            font.bold: context.sortColumn === "gpu"
+                            opacity: context.sortColumn === "gpu" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("gpu")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 70
-                            text: "Disk I/O"
-                            font.bold: true
+                            text: "Disk" + tableHeader.sortArrow("disk")
+                            font.bold: context.sortColumn === "disk"
+                            opacity: context.sortColumn === "disk" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("disk")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 70
-                            text: "Net In"
-                            font.bold: true
+                            text: "Net In" + tableHeader.sortArrow("net_in")
+                            font.bold: context.sortColumn === "net_in"
+                            opacity: context.sortColumn === "net_in" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("net_in")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 70
-                            text: "Net Out"
-                            font.bold: true
+                            text: "Net Out" + tableHeader.sortArrow("net_out")
+                            font.bold: context.sortColumn === "net_out"
+                            opacity: context.sortColumn === "net_out" ? 1.0 : 0.7
                             horizontalAlignment: Text.AlignRight
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tableHeader.headerClicked("net_out")
+                            }
                         }
 
                         Label {
                             Layout.preferredWidth: 60
                             text: "Status"
-                            font.bold: true
+                            opacity: 0.7
                             horizontalAlignment: Text.AlignCenter
+                        }
+
+                        // Kill column header (empty, just spacing)
+                        Item {
+                            Layout.preferredWidth: 28
                         }
                     }
                 }
@@ -654,6 +691,40 @@ Rectangle {
                                 font.pixelSize: 10
                             }
                         }
+
+                        // Kill button
+                        Rectangle {
+                            Layout.preferredWidth: 28
+                            Layout.preferredHeight: 24
+                            radius: 3
+                            color: killMouseArea.containsMouse
+                                ? Qt.rgba(Material.color(Material.Red).r, Material.color(Material.Red).g, Material.color(Material.Red).b, 0.3)
+                                : "transparent"
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: "\u00D7"  // ×
+                                font.pixelSize: 16
+                                font.bold: true
+                                color: killMouseArea.containsMouse
+                                    ? Material.color(Material.Red)
+                                    : palette.mid
+                            }
+
+                            MouseArea {
+                                id: killMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    processContextMenu.processData = proc;
+                                    processContextMenu.popup();
+                                }
+                            }
+
+                            ToolTip.visible: killMouseArea.containsMouse
+                            ToolTip.text: "Kill process (PID " + proc.pid + ")"
+                        }
                     }
 
                     // Context menu
@@ -710,11 +781,13 @@ Rectangle {
     // ========================================================================
 
     // Kill service client - recreated when host changes
+    // Hostname must be sanitized: ROS 2 names only allow alphanumerics and '_'
     property var killServiceClient: {
         if (!context.selectedHost)
             return null;
+        const sanitized = context.selectedHost.replace(/-/g, '_');
         return Ros2.createServiceClient(
-            "/" + context.selectedHost + "/vitals/kill_process",
+            "/" + sanitized + "/vitals/kill_process",
             "ros2_vitals_msgs/srv/KillProcess"
         );
     }

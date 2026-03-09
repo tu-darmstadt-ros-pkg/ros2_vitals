@@ -1,0 +1,13 @@
+[Unit]
+Description=ROS 2 Vitals Daemon (system metrics collector)
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /run/vitals
+ExecStart=/usr/bin/python3 -m ros2_vitals.daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

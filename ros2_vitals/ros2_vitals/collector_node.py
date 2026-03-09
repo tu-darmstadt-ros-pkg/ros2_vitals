@@ -29,7 +29,7 @@ from .collectors import (
     NetworkCollector,
     DiskCollector,
     ProcessCollector,
-    TcpStatsCollector,
+    NetStatsCollector,
 )
 
 
@@ -68,9 +68,9 @@ class VitalsCollectorNode(Node):
         self._gpu_collector = GpuCollector() if self._monitor_gpu else None
         self._network_collector = NetworkCollector() if self._monitor_network else None
         self._disk_collector = DiskCollector() if self._monitor_disk else None
-        self._tcp_stats_collector = TcpStatsCollector() if self._monitor_processes else None
+        self._net_stats_collector = NetStatsCollector() if self._monitor_processes else None
         self._process_collector = (
-            ProcessCollector(self._gpu_collector, self._tcp_stats_collector)
+            ProcessCollector(self._gpu_collector, self._net_stats_collector)
             if self._monitor_processes else None
         )
 
@@ -85,7 +85,8 @@ class VitalsCollectorNode(Node):
         # Create kill service namespaced by hostname
         # Service will be at /<hostname>/vitals/kill_process
         if self._enable_kill_service:
-            hostname = socket.gethostname()
+            # Sanitize hostname: ROS 2 names only allow alphanumerics and '_'
+            hostname = socket.gethostname().replace('-', '_')
             kill_service_name = f'/{hostname}/vitals/kill_process'
             self._kill_service = self.create_service(
                 KillProcess, kill_service_name, self._handle_kill_request
@@ -105,6 +106,10 @@ class VitalsCollectorNode(Node):
         )
         if self._gpu_collector and self._gpu_collector.available:
             self.get_logger().info("GPU monitoring enabled")
+        if self._net_stats_collector and self._net_stats_collector.available:
+            self.get_logger().info(
+                f"Network stats backend: {self._net_stats_collector.backend_name}"
+            )
 
     def _publish_status(self):
         """Collect and publish system status."""
@@ -307,6 +312,8 @@ class VitalsCollectorNode(Node):
         """Clean up resources."""
         if self._gpu_collector:
             self._gpu_collector.shutdown()
+        if self._net_stats_collector:
+            self._net_stats_collector.shutdown()
         super().destroy_node()
 
 
