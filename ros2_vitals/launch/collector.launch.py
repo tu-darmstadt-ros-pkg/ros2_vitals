@@ -41,10 +41,16 @@ def generate_launch_description():
             description='Path to vitals-daemon Unix socket'
         ),
 
+        DeclareLaunchArgument(
+            'node_name',
+            default_value='vitals_collector',
+            description='Name of the bridge node'
+        ),
+
         Node(
             package='ros2_vitals',
             executable='bridge',
-            name='vitals_collector',
+            name=LaunchConfiguration('node_name'),
             namespace=LaunchConfiguration('namespace'),
             parameters=[
                 LaunchConfiguration('config_file'),
