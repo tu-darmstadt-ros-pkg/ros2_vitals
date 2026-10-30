@@ -8,19 +8,19 @@ import curses
 import threading
 import time
 from typing import Dict, Optional, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from ros2_vitals_msgs.msg import SystemStatus
-from ros2_vitals_msgs.srv import KillProcess
 
 
 @dataclass
 class HostData:
     """Cached data for a host."""
+
     status: Optional[SystemStatus] = None
     last_update: float = 0.0
 
@@ -29,10 +29,10 @@ class VitalsMonitorNode(Node):
     """ROS node that subscribes to vitals status messages."""
 
     def __init__(self):
-        super().__init__('vitals_monitor')
+        super().__init__("vitals_monitor")
 
-        self.declare_parameter('topic', '/vitals/status')
-        topic = self.get_parameter('topic').value
+        self.declare_parameter("topic", "/vitals/status")
+        topic = self.get_parameter("topic").value
 
         # Use wildcard subscription to get all vitals topics
         qos = QoSProfile(
@@ -86,7 +86,7 @@ def draw_progress_bar(width: int, percent: float) -> str:
     """Draw a text-based progress bar."""
     filled = int(width * percent / 100)
     empty = width - filled
-    return '█' * filled + '░' * empty
+    return "█" * filled + "░" * empty
 
 
 class TerminalUI:
@@ -110,10 +110,10 @@ class TerminalUI:
         # Initialize colors
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_GREEN, -1)   # Good
+        curses.init_pair(1, curses.COLOR_GREEN, -1)  # Good
         curses.init_pair(2, curses.COLOR_YELLOW, -1)  # Warning
-        curses.init_pair(3, curses.COLOR_RED, -1)     # Error
-        curses.init_pair(4, curses.COLOR_CYAN, -1)    # Info
+        curses.init_pair(3, curses.COLOR_RED, -1)  # Error
+        curses.init_pair(4, curses.COLOR_CYAN, -1)  # Info
         curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_BLUE)  # Header
 
         while self._running:
@@ -134,9 +134,9 @@ class TerminalUI:
         """Handle keyboard input."""
         height, width = stdscr.getmaxyx()
 
-        if key == ord('q') or key == ord('Q'):
+        if key == ord("q") or key == ord("Q"):
             self._running = False
-        elif key == ord('p') or key == ord('P'):
+        elif key == ord("p") or key == ord("P"):
             self._paused = not self._paused
         elif key == curses.KEY_UP:
             if self._selected_process > 0:
@@ -168,14 +168,18 @@ class TerminalUI:
             visible_procs = self._get_visible_process_count(height)
             max_scroll = max(0, len(self._display_procs) - visible_procs)
             self._scroll_offset = min(max_scroll, self._scroll_offset + visible_procs)
-            self._selected_process = min(len(self._display_procs) - 1, self._selected_process + visible_procs)
+            self._selected_process = min(
+                len(self._display_procs) - 1, self._selected_process + visible_procs
+            )
         elif key == curses.KEY_HOME:
             self._scroll_offset = 0
             self._selected_process = 0
         elif key == curses.KEY_END:
             visible_procs = self._get_visible_process_count(height)
             self._scroll_offset = max(0, len(self._display_procs) - visible_procs)
-            self._selected_process = len(self._display_procs) - 1 if self._display_procs else 0
+            self._selected_process = (
+                len(self._display_procs) - 1 if self._display_procs else 0
+            )
         elif key == curses.KEY_RESIZE:
             # Handle terminal resize
             stdscr.clear()
@@ -200,7 +204,7 @@ class TerminalUI:
         controls = " [Q]uit [P]ause [<>] Host [^v] Process [PgUp/Dn] Scroll "
         try:
             stdscr.attron(curses.color_pair(5))
-            stdscr.addstr(0, 0, ' ' * (width - 1))
+            stdscr.addstr(0, 0, " " * (width - 1))
             stdscr.addstr(0, 2, title, curses.A_BOLD)
             if width > len(controls) + len(title) + 4:
                 stdscr.addstr(0, width - len(controls) - 2, controls)
@@ -210,8 +214,12 @@ class TerminalUI:
 
         if not hosts:
             try:
-                stdscr.addstr(height // 2, max(0, width // 2 - 15), "Waiting for vitals data...",
-                              curses.color_pair(4))
+                stdscr.addstr(
+                    height // 2,
+                    max(0, width // 2 - 15),
+                    "Waiting for vitals data...",
+                    curses.color_pair(4),
+                )
             except curses.error:
                 pass
             stdscr.refresh()
@@ -236,8 +244,15 @@ class TerminalUI:
 
             age_str = f"({age:.1f}s ago)" if age < 60 else f"({age / 60:.0f}m ago)"
             try:
-                stdscr.addstr(row, 2, prefix + hostname, curses.A_BOLD if i == self._selected_host else 0)
-                stdscr.addstr(row, 2 + len(prefix) + len(hostname) + 1, age_str, status_color)
+                stdscr.addstr(
+                    row,
+                    2,
+                    prefix + hostname,
+                    curses.A_BOLD if i == self._selected_host else 0,
+                )
+                stdscr.addstr(
+                    row, 2 + len(prefix) + len(hostname) + 1, age_str, status_color
+                )
             except curses.error:
                 pass
             row += 1
@@ -254,14 +269,16 @@ class TerminalUI:
 
         stdscr.refresh()
 
-    def _draw_host_details(self, stdscr, start_row: int, width: int, height: int, status: SystemStatus):
+    def _draw_host_details(
+        self, stdscr, start_row: int, width: int, height: int, status: SystemStatus
+    ):
         """Draw details for a single host."""
         row = start_row
 
         # System overview
         try:
             header = f"=== {status.hostname} ==="
-            stdscr.addstr(row, 2, header[:width-4], curses.A_BOLD)
+            stdscr.addstr(row, 2, header[: width - 4], curses.A_BOLD)
         except curses.error:
             pass
         row += 2
@@ -272,17 +289,29 @@ class TerminalUI:
         # CPU
         try:
             cpu_bar = draw_progress_bar(20, status.cpu_percent)
-            cpu_color = (curses.color_pair(1) if status.cpu_percent < 70
-                         else curses.color_pair(2) if status.cpu_percent < 90
-                         else curses.color_pair(3))
-            stdscr.addstr(row, 2, f"CPU:  [{cpu_bar}] {status.cpu_percent:5.1f}%", cpu_color)
+            cpu_color = (
+                curses.color_pair(1)
+                if status.cpu_percent < 70
+                else curses.color_pair(2)
+                if status.cpu_percent < 90
+                else curses.color_pair(3)
+            )
+            stdscr.addstr(
+                row, 2, f"CPU:  [{cpu_bar}] {status.cpu_percent:5.1f}%", cpu_color
+            )
             if width > 55:
                 stdscr.addstr(row, 45, f"({status.cpu_count} cores)")
             if width > 70 and status.cpu_temperature_celsius > 0:
-                temp_color = (curses.color_pair(1) if status.cpu_temperature_celsius < 70
-                              else curses.color_pair(2) if status.cpu_temperature_celsius < 85
-                              else curses.color_pair(3))
-                stdscr.addstr(row, 60, f"{status.cpu_temperature_celsius:.0f}C", temp_color)
+                temp_color = (
+                    curses.color_pair(1)
+                    if status.cpu_temperature_celsius < 70
+                    else curses.color_pair(2)
+                    if status.cpu_temperature_celsius < 85
+                    else curses.color_pair(3)
+                )
+                stdscr.addstr(
+                    row, 60, f"{status.cpu_temperature_celsius:.0f}C", temp_color
+                )
         except curses.error:
             pass
         row += 1
@@ -292,12 +321,19 @@ class TerminalUI:
 
         # RAM
         try:
-            ram_percent = (status.ram_used_bytes / status.ram_total_bytes * 100
-                           if status.ram_total_bytes > 0 else 0)
+            ram_percent = (
+                status.ram_used_bytes / status.ram_total_bytes * 100
+                if status.ram_total_bytes > 0
+                else 0
+            )
             ram_bar = draw_progress_bar(20, ram_percent)
-            ram_color = (curses.color_pair(1) if ram_percent < 75
-                         else curses.color_pair(2) if ram_percent < 90
-                         else curses.color_pair(3))
+            ram_color = (
+                curses.color_pair(1)
+                if ram_percent < 75
+                else curses.color_pair(2)
+                if ram_percent < 90
+                else curses.color_pair(3)
+            )
             ram_used = format_bytes(status.ram_used_bytes)
             ram_total = format_bytes(status.ram_total_bytes)
             stdscr.addstr(row, 2, f"RAM:  [{ram_bar}] {ram_percent:5.1f}%", ram_color)
@@ -316,19 +352,36 @@ class TerminalUI:
                 if row >= height - 1:
                     break
                 try:
-                    gpu_mem_percent = (gpu.memory_used_bytes / gpu.memory_total_bytes * 100
-                                       if gpu.memory_total_bytes > 0 else 0)
+                    gpu_mem_percent = (
+                        gpu.memory_used_bytes / gpu.memory_total_bytes * 100
+                        if gpu.memory_total_bytes > 0
+                        else 0
+                    )
                     gpu_bar = draw_progress_bar(20, gpu.utilization_percent)
                     mem_bar = draw_progress_bar(10, gpu_mem_percent)
 
-                    stdscr.addstr(row, 2, f"GPU{gpu.index}: [{gpu_bar}] {gpu.utilization_percent:5.1f}%")
+                    stdscr.addstr(
+                        row,
+                        2,
+                        f"GPU{gpu.index}: [{gpu_bar}] {gpu.utilization_percent:5.1f}%",
+                    )
                     if width > 75:
-                        stdscr.addstr(row, 45, f"VRAM: [{mem_bar}] {format_bytes(gpu.memory_used_bytes)}")
+                        stdscr.addstr(
+                            row,
+                            45,
+                            f"VRAM: [{mem_bar}] {format_bytes(gpu.memory_used_bytes)}",
+                        )
                     if width > 85 and gpu.temperature_celsius > 0:
-                        temp_color = (curses.color_pair(1) if gpu.temperature_celsius < 70
-                                      else curses.color_pair(2) if gpu.temperature_celsius < 85
-                                      else curses.color_pair(3))
-                        stdscr.addstr(row, 75, f"{gpu.temperature_celsius:.0f}C", temp_color)
+                        temp_color = (
+                            curses.color_pair(1)
+                            if gpu.temperature_celsius < 70
+                            else curses.color_pair(2)
+                            if gpu.temperature_celsius < 85
+                            else curses.color_pair(3)
+                        )
+                        stdscr.addstr(
+                            row, 75, f"{gpu.temperature_celsius:.0f}C", temp_color
+                        )
                 except curses.error:
                     pass
                 row += 1
@@ -338,7 +391,11 @@ class TerminalUI:
 
         # Load average
         try:
-            stdscr.addstr(row, 2, f"Load: {status.load_avg_1min:.2f} {status.load_avg_5min:.2f} {status.load_avg_15min:.2f}")
+            stdscr.addstr(
+                row,
+                2,
+                f"Load: {status.load_avg_1min:.2f} {status.load_avg_5min:.2f} {status.load_avg_15min:.2f}",
+            )
 
             # Uptime
             uptime_hours = status.uptime_seconds / 3600
@@ -361,49 +418,60 @@ class TerminalUI:
             for proc in status.processes:
                 if proc.is_launch_process:
                     # Add launch group header
-                    self._display_procs.append({
-                        'type': 'launch',
-                        'name': proc.launch_name or proc.node_name,
-                        'cpu': proc.cpu_percent,
-                        'ram': proc.ram_bytes,
-                        'gpu_index': proc.gpu_index,
-                        'gpu_mem': proc.gpu_memory_bytes,
-                        'disk_rate': proc.disk_read_bytes_per_sec + proc.disk_write_bytes_per_sec,
-                        'net_rx': proc.net_rx_bytes_per_sec,
-                        'net_tx': proc.net_tx_bytes_per_sec,
-                        'child_count': len(proc.child_nodes),
-                    })
+                    self._display_procs.append(
+                        {
+                            "type": "launch",
+                            "name": proc.launch_name or proc.node_name,
+                            "cpu": proc.cpu_percent,
+                            "ram": proc.ram_bytes,
+                            "gpu_index": proc.gpu_index,
+                            "gpu_mem": proc.gpu_memory_bytes,
+                            "disk_rate": proc.disk_read_bytes_per_sec
+                            + proc.disk_write_bytes_per_sec,
+                            "net_rx": proc.net_rx_bytes_per_sec,
+                            "net_tx": proc.net_tx_bytes_per_sec,
+                            "child_count": len(proc.child_nodes),
+                        }
+                    )
                     # Add child nodes
                     for child in proc.child_nodes:
-                        self._display_procs.append({
-                            'type': 'node',
-                            'name': child.node_name,
-                            'cpu': child.cpu_percent,
-                            'ram': child.ram_bytes,
-                            'gpu_index': child.gpu_index,
-                            'gpu_mem': child.gpu_memory_bytes,
-                            'disk_rate': child.disk_read_bytes_per_sec + child.disk_write_bytes_per_sec,
-                            'net_rx': child.net_rx_bytes_per_sec,
-                            'net_tx': child.net_tx_bytes_per_sec,
-                            'parent': proc.launch_name or proc.node_name,
-                        })
+                        self._display_procs.append(
+                            {
+                                "type": "node",
+                                "name": child.node_name,
+                                "cpu": child.cpu_percent,
+                                "ram": child.ram_bytes,
+                                "gpu_index": child.gpu_index,
+                                "gpu_mem": child.gpu_memory_bytes,
+                                "disk_rate": child.disk_read_bytes_per_sec
+                                + child.disk_write_bytes_per_sec,
+                                "net_rx": child.net_rx_bytes_per_sec,
+                                "net_tx": child.net_tx_bytes_per_sec,
+                                "parent": proc.launch_name or proc.node_name,
+                            }
+                        )
                 else:
                     # Standalone process
-                    self._display_procs.append({
-                        'type': 'node',
-                        'name': proc.node_name or proc.cmdline[:40],
-                        'cpu': proc.cpu_percent,
-                        'ram': proc.ram_bytes,
-                        'gpu_index': proc.gpu_index,
-                        'gpu_mem': proc.gpu_memory_bytes,
-                        'disk_rate': proc.disk_read_bytes_per_sec + proc.disk_write_bytes_per_sec,
-                        'net_rx': proc.net_rx_bytes_per_sec,
-                        'net_tx': proc.net_tx_bytes_per_sec,
-                    })
+                    self._display_procs.append(
+                        {
+                            "type": "node",
+                            "name": proc.node_name or proc.cmdline[:40],
+                            "cpu": proc.cpu_percent,
+                            "ram": proc.ram_bytes,
+                            "gpu_index": proc.gpu_index,
+                            "gpu_mem": proc.gpu_memory_bytes,
+                            "disk_rate": proc.disk_read_bytes_per_sec
+                            + proc.disk_write_bytes_per_sec,
+                            "net_rx": proc.net_rx_bytes_per_sec,
+                            "net_tx": proc.net_tx_bytes_per_sec,
+                        }
+                    )
 
         # Clamp selection to valid range
         if self._display_procs:
-            self._selected_process = min(self._selected_process, len(self._display_procs) - 1)
+            self._selected_process = min(
+                self._selected_process, len(self._display_procs) - 1
+            )
         else:
             self._selected_process = 0
 
@@ -421,7 +489,7 @@ class TerminalUI:
         # Column header
         try:
             header = f"{'Node':<35} {'CPU':>6} {'RAM':>9} {'GPU':>9} {'Disk':>10} {'Net In':>9} {'Net Out':>9}"
-            stdscr.addstr(row, 4, header[:width-6], curses.A_DIM)
+            stdscr.addstr(row, 4, header[: width - 6], curses.A_DIM)
         except curses.error:
             pass
         row += 1
@@ -436,44 +504,54 @@ class TerminalUI:
         self._scroll_offset = min(self._scroll_offset, max_scroll)
 
         # Process list with scrolling
-        for i, proc in enumerate(self._display_procs[self._scroll_offset:self._scroll_offset + visible_procs]):
+        for i, proc in enumerate(
+            self._display_procs[
+                self._scroll_offset : self._scroll_offset + visible_procs
+            ]
+        ):
             if row >= height - 1:
                 break
 
             actual_idx = i + self._scroll_offset
 
-            if proc['type'] == 'launch':
+            if proc["type"] == "launch":
                 # Launch group header
-                child_count = proc.get('child_count', 0)
+                child_count = proc.get("child_count", 0)
                 node_name = f"[L] {proc['name']} ({child_count})"
                 attr_extra = curses.A_BOLD
             else:
                 # Node - indent if it has a parent launch
-                if 'parent' in proc:
+                if "parent" in proc:
                     node_name = f"  +- {proc['name']}"
                 else:
-                    node_name = proc['name']
+                    node_name = proc["name"]
                 attr_extra = 0
 
             # Truncate name based on available width
             max_name_len = min(33, width - 70)
             if len(node_name) > max_name_len:
-                node_name = node_name[:max_name_len-3] + "..."
+                node_name = node_name[: max_name_len - 3] + "..."
 
-            gpu_str = format_bytes(proc['gpu_mem']) if proc['gpu_index'] >= 0 else "-"
-            net_rx = proc.get('net_rx', 0.0)
-            net_tx = proc.get('net_tx', 0.0)
+            gpu_str = format_bytes(proc["gpu_mem"]) if proc["gpu_index"] >= 0 else "-"
+            net_rx = proc.get("net_rx", 0.0)
+            net_tx = proc.get("net_tx", 0.0)
 
             try:
-                line = (f"{node_name:<35} {proc['cpu']:5.1f}% "
-                        f"{format_bytes(proc['ram']):>9} {gpu_str:>9} "
-                        f"{format_bytes_rate(proc['disk_rate']):>10} "
-                        f"{format_bytes_rate(net_rx):>9} {format_bytes_rate(net_tx):>9}")
+                line = (
+                    f"{node_name:<35} {proc['cpu']:5.1f}% "
+                    f"{format_bytes(proc['ram']):>9} {gpu_str:>9} "
+                    f"{format_bytes_rate(proc['disk_rate']):>10} "
+                    f"{format_bytes_rate(net_rx):>9} {format_bytes_rate(net_tx):>9}"
+                )
 
                 # Truncate line to fit width
-                line = line[:width-6]
+                line = line[: width - 6]
 
-                attrs = curses.A_REVERSE if actual_idx == self._selected_process else attr_extra
+                attrs = (
+                    curses.A_REVERSE
+                    if actual_idx == self._selected_process
+                    else attr_extra
+                )
                 stdscr.addstr(row, 4, line, attrs)
             except curses.error:
                 pass
@@ -483,7 +561,9 @@ class TerminalUI:
         if len(self._display_procs) > visible_procs:
             try:
                 scroll_info = f"[{self._scroll_offset + 1}-{min(self._scroll_offset + visible_procs, len(self._display_procs))}/{len(self._display_procs)}]"
-                stdscr.addstr(height - 1, width - len(scroll_info) - 2, scroll_info, curses.A_DIM)
+                stdscr.addstr(
+                    height - 1, width - len(scroll_info) - 2, scroll_info, curses.A_DIM
+                )
             except curses.error:
                 pass
 
@@ -508,5 +588,5 @@ def main(args=None):
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

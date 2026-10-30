@@ -47,6 +47,7 @@ Rectangle {
             spacing: 8
 
             Label {
+                objectName: "hostCardHostnameLabel"
                 text: status ? status.hostname : "Unknown"
                 font.bold: true
                 font.pixelSize: 14
@@ -55,6 +56,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
 
             Label {
+                objectName: "hostCardIpLabel"
                 visible: status && status.ip_addresses && status.ip_addresses.length > 0
                 text: status && status.ip_addresses && status.ip_addresses.length > 0
                     ? status.ip_addresses.at(0) : ""
@@ -65,6 +67,7 @@ Rectangle {
 
         // CPU bar
         UsageBar {
+            objectName: "hostCardCpuBar"
             Layout.fillWidth: true
             label: "CPU"
             value: status ? status.cpu_percent : 0
@@ -75,6 +78,7 @@ Rectangle {
 
         // RAM bar
         UsageBar {
+            objectName: "hostCardRamBar"
             Layout.fillWidth: true
             label: "RAM"
             value: status && status.ram_total_bytes > 0
@@ -102,6 +106,7 @@ Rectangle {
 
                 // GPU utilization bar
                 UsageBar {
+                    objectName: "hostCardGpuBar_" + parent.index
                     Layout.fillWidth: true
                     label: "GPU" + parent.index
                     value: gpu.utilization_percent
@@ -111,6 +116,7 @@ Rectangle {
 
                 // VRAM bar
                 UsageBar {
+                    objectName: "hostCardVramBar_" + parent.index
                     Layout.fillWidth: true
                     label: "  VRAM"
                     value: parent.memPercent
@@ -140,6 +146,7 @@ Rectangle {
                     }
                     return total;
                 }
+                objectName: "hostCardNetSendLabel"
                 text: "↑ " + formatBytesRate(totalSend)
                 font.pixelSize: 11
             }
@@ -154,6 +161,7 @@ Rectangle {
                     }
                     return total;
                 }
+                objectName: "hostCardNetRecvLabel"
                 text: "↓ " + formatBytesRate(totalRecv)
                 font.pixelSize: 11
             }
@@ -174,6 +182,7 @@ Rectangle {
             Layout.fillWidth: true
 
             Label {
+                objectName: "hostCardProcessCountLabel"
                 text: status && status.processes
                     ? status.processes.length + " ROS processes"
                     : "No processes"
@@ -185,6 +194,7 @@ Rectangle {
 
             // Uptime
             Label {
+                objectName: "hostCardUptimeLabel"
                 visible: status && status.uptime_seconds > 0
                 text: "Up: " + formatUptime(status ? status.uptime_seconds : 0)
                 font.pixelSize: 11

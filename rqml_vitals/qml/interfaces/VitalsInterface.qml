@@ -151,6 +151,7 @@ QtObject {
 
     property Subscription _statusSubscription: Subscription {
         topic: root.enabled ? root.topic : ""
+        messageType: "ros2_vitals_msgs/msg/SystemStatus"
         throttleRate: 0  // Receive all messages
         onNewMessage: function(msg) {
             if (!root.enabled)

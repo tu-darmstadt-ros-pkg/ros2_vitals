@@ -1,0 +1,7 @@
+[default.extend-words]
+# Kernel macro used in the eBPF program (PT_REGS_PARM1, PT_REGS_PARM2, ...)
+PARM = "PARM"
+# Retransmission timeout field in `ss -i` output
+rto = "rto"
+# Qt macro
+INVOKABLE = "INVOKABLE"

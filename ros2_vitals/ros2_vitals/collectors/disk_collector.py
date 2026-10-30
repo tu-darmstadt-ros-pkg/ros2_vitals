@@ -37,8 +37,8 @@ class DiskCollector:
 
             # Try to find I/O counters for this partition's device
             # Device name might be like /dev/sda1, we need sda1 or sda
-            device_name = part.device.split('/')[-1] if part.device else ''
-            base_device = ''.join(c for c in device_name if not c.isdigit())
+            device_name = part.device.split("/")[-1] if part.device else ""
+            base_device = "".join(c for c in device_name if not c.isdigit())
 
             read_rate = 0.0
             write_rate = 0.0
@@ -55,16 +55,18 @@ class DiskCollector:
                     )
                     break
 
-            partitions.append({
-                'device': part.device,
-                'mount_point': part.mountpoint,
-                'filesystem': part.fstype,
-                'total_bytes': usage.total,
-                'used_bytes': usage.used,
-                'free_bytes': usage.free,
-                'usage_percent': usage.percent,
-                'read_bytes_per_sec': read_rate,
-                'write_bytes_per_sec': write_rate,
-            })
+            partitions.append(
+                {
+                    "device": part.device,
+                    "mount_point": part.mountpoint,
+                    "filesystem": part.fstype,
+                    "total_bytes": usage.total,
+                    "used_bytes": usage.used,
+                    "free_bytes": usage.free,
+                    "usage_percent": usage.percent,
+                    "read_bytes_per_sec": read_rate,
+                    "write_bytes_per_sec": write_rate,
+                }
+            )
 
         return partitions

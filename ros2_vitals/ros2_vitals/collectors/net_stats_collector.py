@@ -14,7 +14,7 @@ from .ebpf_net_collector import EbpfNetCollector
 
 # Regex for ss output parsing (fallback path)
 _REGEX_PROCESS = re.compile(r'users:\(\("(?P<name>[^"]+)",pid=(?P<pid>\d+),')
-_REGEX_METRICS = re.compile(r'bytes_acked:(?P<tx>\d+).*bytes_received:(?P<rx>\d+)')
+_REGEX_METRICS = re.compile(r"bytes_acked:(?P<tx>\d+).*bytes_received:(?P<rx>\d+)")
 
 
 class NetStatsCollector:
@@ -28,16 +28,16 @@ class NetStatsCollector:
         self._rate_calc = RateCalculator()
         self._last_collect_time = 0.0
         self._last_seen_pids: Set[int] = set()
-        self._backend = 'none'
+        self._backend = "none"
 
         # Try eBPF first
         self._ebpf = EbpfNetCollector()
         if self._ebpf.available:
-            self._backend = 'ebpf'
+            self._backend = "ebpf"
         else:
             # Fall back to ss
             if self._check_ss_available():
-                self._backend = 'ss'
+                self._backend = "ss"
 
     # ------------------------------------------------------------------
     # Public interface (same contract as old TcpStatsCollector)
@@ -46,7 +46,7 @@ class NetStatsCollector:
     @property
     def available(self) -> bool:
         """Whether any backend is available."""
-        return self._backend != 'none'
+        return self._backend != "none"
 
     @property
     def backend_name(self) -> str:
@@ -58,30 +58,31 @@ class NetStatsCollector:
 
     def refresh(self) -> None:
         """Refresh stats cache (call once per collection cycle)."""
-        if self._backend == 'ebpf':
+        if self._backend == "ebpf":
             self._refresh_ebpf()
-        elif self._backend == 'ss':
+        elif self._backend == "ss":
             self._refresh_ss()
 
-    def get_process_stats(self, pid: int,
-                          child_pids: Optional[list] = None) -> Dict[str, float]:
+    def get_process_stats(
+        self, pid: int, child_pids: Optional[list] = None
+    ) -> Dict[str, float]:
         """Get aggregated network stats for a process and its children."""
         rx_rate = 0.0
         tx_rate = 0.0
 
         if pid in self._last_stats:
-            rx_rate += self._last_stats[pid].get('rx_bytes_per_sec', 0.0)
-            tx_rate += self._last_stats[pid].get('tx_bytes_per_sec', 0.0)
+            rx_rate += self._last_stats[pid].get("rx_bytes_per_sec", 0.0)
+            tx_rate += self._last_stats[pid].get("tx_bytes_per_sec", 0.0)
 
         if child_pids:
             for child_pid in child_pids:
                 if child_pid in self._last_stats:
-                    rx_rate += self._last_stats[child_pid].get('rx_bytes_per_sec', 0.0)
-                    tx_rate += self._last_stats[child_pid].get('tx_bytes_per_sec', 0.0)
+                    rx_rate += self._last_stats[child_pid].get("rx_bytes_per_sec", 0.0)
+                    tx_rate += self._last_stats[child_pid].get("tx_bytes_per_sec", 0.0)
 
         return {
-            'rx_bytes_per_sec': rx_rate,
-            'tx_bytes_per_sec': tx_rate,
+            "rx_bytes_per_sec": rx_rate,
+            "tx_bytes_per_sec": tx_rate,
         }
 
     def clear(self):
@@ -108,11 +109,11 @@ class NetStatsCollector:
 
         rates: Dict[int, Dict[str, float]] = {}
         for pid, counters in raw.items():
-            total_tx = counters.get('tcp_tx', 0) + counters.get('udp_tx', 0)
-            total_rx = counters.get('tcp_rx', 0) + counters.get('udp_rx', 0)
+            total_tx = counters.get("tcp_tx", 0) + counters.get("udp_tx", 0)
+            total_rx = counters.get("tcp_rx", 0) + counters.get("udp_rx", 0)
             rates[pid] = {
-                'rx_bytes_per_sec': total_rx / dt,
-                'tx_bytes_per_sec': total_tx / dt,
+                "rx_bytes_per_sec": total_rx / dt,
+                "tx_bytes_per_sec": total_tx / dt,
             }
 
         self._last_seen_pids = set(rates.keys())
@@ -156,14 +157,16 @@ class NetStatsCollector:
         rates: Dict[int, Dict[str, float]] = {}
         for pid, stats in current_stats.items():
             rx_rate = self._rate_calc.calculate_rate(
-                f"net.{pid}.rx", stats['rx_total'],
+                f"net.{pid}.rx",
+                stats["rx_total"],
             )
             tx_rate = self._rate_calc.calculate_rate(
-                f"net.{pid}.tx", stats['tx_total'],
+                f"net.{pid}.tx",
+                stats["tx_total"],
             )
             rates[pid] = {
-                'rx_bytes_per_sec': rx_rate,
-                'tx_bytes_per_sec': tx_rate,
+                "rx_bytes_per_sec": rx_rate,
+                "tx_bytes_per_sec": tx_rate,
             }
 
         # Clean stale rate entries
@@ -183,22 +186,23 @@ class NetStatsCollector:
         current_pid: Optional[int] = None
 
         for line in output.splitlines():
-            line = line.strip()
-
-            if "users:" in line:
+            # Socket lines are unindented, their metrics follow on an indented line.
+            # Sockets without a visible owner must reset the PID so their bytes
+            # are not attributed to the previous process.
+            if line and not line[0].isspace():
                 p_match = _REGEX_PROCESS.search(line)
-                current_pid = int(p_match.group('pid')) if p_match else None
+                current_pid = int(p_match.group("pid")) if p_match else None
 
             elif current_pid is not None:
                 m_match = _REGEX_METRICS.search(line)
                 if m_match:
-                    tx_bytes = int(m_match.group('tx'))
-                    rx_bytes = int(m_match.group('rx'))
+                    tx_bytes = int(m_match.group("tx"))
+                    rx_bytes = int(m_match.group("rx"))
 
                     if current_pid not in pid_stats:
-                        pid_stats[current_pid] = {'rx_total': 0, 'tx_total': 0}
+                        pid_stats[current_pid] = {"rx_total": 0, "tx_total": 0}
 
-                    pid_stats[current_pid]['rx_total'] += rx_bytes
-                    pid_stats[current_pid]['tx_total'] += tx_bytes
+                    pid_stats[current_pid]["rx_total"] += rx_bytes
+                    pid_stats[current_pid]["tx_total"] += tx_bytes
 
         return pid_stats
