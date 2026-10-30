@@ -3,10 +3,7 @@
 <package format="3">
   <name>ros2_vitals</name>
   <version>0.1.0</version>
-  <description>
-    Lightweight system monitor for ROS 2 that collects CPU, RAM, GPU, disk, and network
-    statistics for each machine and discovers ROS processes with their resource usage.
-  </description>
+  <description>Lightweight system monitor for ROS 2 that collects CPU, RAM, GPU, disk, and network statistics for each machine and discovers ROS processes with their resource usage.</description>
   <maintainer email="todo@example.com">TODO</maintainer>
   <license>MIT</license>
 
@@ -19,6 +16,9 @@
   <!-- Python dependencies -->
   <exec_depend>python3-psutil</exec_depend>
   <!-- pynvml is optional for GPU monitoring -->
+
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

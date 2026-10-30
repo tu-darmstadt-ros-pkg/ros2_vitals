@@ -3,5 +3,5 @@
 
 from ros2_vitals.terminal_ui.app import main
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

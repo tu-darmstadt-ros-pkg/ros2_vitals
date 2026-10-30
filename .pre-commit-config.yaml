@@ -1,0 +1,113 @@
+# To use:
+#
+#     pre-commit run -a
+#
+# Or:
+#
+#     pre-commit install  # (runs every time you commit in git)
+#
+# To update this file:
+#
+#     pre-commit autoupdate
+#
+# See https://github.com/pre-commit/pre-commit
+
+repos:
+  # Standard hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-docstring-first
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-xml
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+        exclude_types: [rst]
+
+  # XML Formatting
+  - repo: https://github.com/efrecon/pre-commit-hook-lxml
+    rev: v0.1.4
+    hooks:
+      - id: format-xml
+        files: \.(xml|urdf|srdf|xacro)$
+        exclude: (^|/)package\.xml$
+        args: [--write, --self-closing, nospace]
+
+  # YAML Formatting
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.15.0
+    hooks:
+      - id: pretty-format-yaml
+        args: [--autofix, --indent, '2', --offset, '2']
+
+  # CPP Checks
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v21.1.8
+    hooks:
+      - id: clang-format
+        name: Clang Format
+        args: [--style=file]
+        files: \.(cpp|hpp|h|c|cc)$
+
+  - repo: local
+    hooks:
+      - id: cppcheck
+        name: Cppcheck
+        entry: bash -c "cppcheck --force --quiet --inline-suppr --error-exitcode=1 --language=c++ $(find . -type d -name 'cmake-build-*' -prune -o -path '*/test/*' -prune -o \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.cc' \) -print)"
+        language: system
+        files: \.(cpp|cc|hpp|h)$
+        # Test sources are pruned by the find above, so don't trigger on them either
+        exclude: (^|/)test/
+        pass_filenames: false
+
+  # Python hooks
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.14
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # CMake Formatting
+  # Disabled: cmake-format fails with Python 3.15, to be replaced
+  # - repo: https://github.com/cheshirekow/cmake-format-precommit
+  #   rev: v0.6.13
+  #   hooks:
+  #     - id: cmake-format
+  #     - id: cmake-lint
+
+  # Package XML
+  - repo: https://github.com/Joschi3/package_xml_validation.git
+    rev: v1.4.2
+    hooks:
+      - id: format-package-xml
+        name: Validate and Format package.xml
+
+  # Spellcheck
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.34.0
+    hooks:
+      - id: typos
+
+  # Prevent committing with Bug comments
+  - repo: local
+    hooks:
+      - id: no-bug-comments
+        name: No Bug comments
+        description: Prevent commit if Bug comments are present
+        entry: (?i)#\s*bug
+        language: pygrep
+        types: [file]
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.36.1
+    hooks:
+      - id: check-github-workflows
+        args: [--verbose]
+      - id: check-github-actions
+        args: [--verbose]

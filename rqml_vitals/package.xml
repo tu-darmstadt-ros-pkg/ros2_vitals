@@ -5,16 +5,20 @@
   <version>0.1.0</version>
   <description>RQML plugin for ROS 2 Vitals system monitor visualization</description>
   <maintainer email="todo@example.com">TODO</maintainer>
-  <license>MIT</license>
+  <license>GPL-3.0-only</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rqml_core</depend>
   <depend>ros2_vitals_msgs</depend>
+  <depend>rqml_core</depend>
 
   <exec_depend>qml6-module-qtquick-controls</exec_depend>
   <exec_depend>qml6-module-qtquick-layouts</exec_depend>
   <exec_depend>qml6_ros2_plugin</exec_depend>
+
+  <test_depend>qml6_ros2_plugin</test_depend>
+  <test_depend>qt6-base-dev</test_depend>
+  <test_depend>qt6-declarative-dev</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

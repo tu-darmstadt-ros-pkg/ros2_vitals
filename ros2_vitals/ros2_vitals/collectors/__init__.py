@@ -7,10 +7,10 @@ from .process_collector import ProcessCollector
 from .net_stats_collector import NetStatsCollector
 
 __all__ = [
-    'SystemCollector',
-    'GpuCollector',
-    'NetworkCollector',
-    'DiskCollector',
-    'ProcessCollector',
-    'NetStatsCollector',
+    "SystemCollector",
+    "GpuCollector",
+    "NetworkCollector",
+    "DiskCollector",
+    "ProcessCollector",
+    "NetStatsCollector",
 ]

@@ -6,7 +6,7 @@ vitals_collector:
     publish_rate: 1.0
 
     # Topic to publish status messages
-    topic: "/vitals/status"
+    topic: /vitals/status
 
     # Enable GPU monitoring (requires pynvml)
     monitor_gpu: true
@@ -27,4 +27,4 @@ vitals_collector:
     enable_kill_service: true
 
     # Unix socket path to connect to vitals-daemon (bridge mode only)
-    socket_path: "/run/vitals/collector.sock"
+    socket_path: /run/vitals/collector.sock

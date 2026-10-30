@@ -103,6 +103,7 @@ class EbpfNetCollector:
         """
         try:
             from bcc import BPF
+
             # Suppress BCC compiler output (warnings, errors) to stderr.
             # On failure we fall back to ss, so the user doesn't need to
             # see pages of kernel header warnings.
@@ -151,7 +152,7 @@ class EbpfNetCollector:
         for key, val in stats_map.items():
             pid = key.pid
             if pid not in result:
-                result[pid] = {'tcp_tx': 0, 'tcp_rx': 0, 'udp_tx': 0, 'udp_rx': 0}
+                result[pid] = {"tcp_tx": 0, "tcp_rx": 0, "udp_tx": 0, "udp_rx": 0}
 
             field = self._key_to_field(key.protocol, key.direction)
             result[pid][field] += val.value
@@ -165,9 +166,9 @@ class EbpfNetCollector:
     def _key_to_field(protocol: int, direction: int) -> str:
         """Map (protocol, direction) to field name."""
         if protocol == 1:
-            return 'tcp_tx' if direction == 0 else 'tcp_rx'
+            return "tcp_tx" if direction == 0 else "tcp_rx"
         else:
-            return 'udp_tx' if direction == 0 else 'udp_rx'
+            return "udp_tx" if direction == 0 else "udp_rx"
 
     def shutdown(self):
         """Clean up BPF resources."""

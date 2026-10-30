@@ -219,4 +219,5 @@ Service to terminate a process by PID.
 
 ## License
 
-MIT
+`ros2_vitals` and `ros2_vitals_msgs` are licensed under MIT.
+`rqml_vitals` is licensed under GPL-3.0-only, matching [rqml](https://github.com/StefanFabian/rqml), see [rqml_vitals/LICENSE](rqml_vitals/LICENSE).

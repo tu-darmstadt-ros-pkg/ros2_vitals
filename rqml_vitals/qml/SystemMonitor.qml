@@ -266,12 +266,14 @@ Rectangle {
             }
 
             TextField {
+                objectName: "systemMonitorTopicField"
                 Layout.fillWidth: true
                 text: context.topic || "/vitals/status"
                 onEditingFinished: context.topic = text
             }
 
             IconToggleButton {
+                objectName: "systemMonitorEnableToggle"
                 iconOn: IconFont.iconPause
                 iconOff: IconFont.iconPlay
                 tooltipTextOn: "Click to pause"
@@ -281,6 +283,7 @@ Rectangle {
             }
 
             IconButton {
+                objectName: "systemMonitorClearButton"
                 text: IconFont.iconTrash
                 tooltipText: "Clear all data"
                 onClicked: d.vitalsInterface.clear()
@@ -292,6 +295,7 @@ Rectangle {
         // --------------------------------------------------------------------
 
         Label {
+            objectName: "systemMonitorHostCountLabel"
             text: "Hosts (" + d.vitalsInterface.hostCount + ")"
             font.bold: true
         }
@@ -313,6 +317,8 @@ Rectangle {
                     HostCard {
                         required property string modelData
                         required property int index
+
+                        objectName: "systemMonitorHostCard_" + index
 
                         width: 300
                         // Dynamic height based on GPU count
@@ -347,6 +353,7 @@ Rectangle {
                     border.color: palette.mid
 
                     Label {
+                        objectName: "systemMonitorWaitingLabel"
                         anchors.centerIn: parent
                         text: context.enabled
                             ? "Waiting for vitals data...\nSubscribed to: " + (context.topic || "/vitals/status")
@@ -363,6 +370,7 @@ Rectangle {
         // --------------------------------------------------------------------
 
         Label {
+            objectName: "systemMonitorProcessesLabel"
             Layout.fillWidth: true
             text: context.selectedHost
                 ? "Processes on " + context.selectedHost
@@ -382,6 +390,7 @@ Rectangle {
 
             ListView {
                 id: processListView
+                objectName: "systemMonitorProcessList"
                 anchors.fill: parent
                 anchors.margins: 4
                 clip: true
@@ -425,6 +434,7 @@ Rectangle {
                         spacing: 8
 
                         Label {
+                            objectName: "systemMonitorSortHeader_name"
                             Layout.fillWidth: true
                             Layout.preferredWidth: 200
                             text: "Node" + tableHeader.sortArrow("name")
@@ -438,6 +448,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_cpu"
                             Layout.preferredWidth: 60
                             text: "CPU" + tableHeader.sortArrow("cpu")
                             font.bold: context.sortColumn === "cpu"
@@ -451,6 +462,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_ram"
                             Layout.preferredWidth: 80
                             text: "RAM" + tableHeader.sortArrow("ram")
                             font.bold: context.sortColumn === "ram"
@@ -464,6 +476,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_gpu"
                             Layout.preferredWidth: 80
                             text: "GPU" + tableHeader.sortArrow("gpu")
                             font.bold: context.sortColumn === "gpu"
@@ -477,6 +490,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_disk"
                             Layout.preferredWidth: 70
                             text: "Disk" + tableHeader.sortArrow("disk")
                             font.bold: context.sortColumn === "disk"
@@ -490,6 +504,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_net_in"
                             Layout.preferredWidth: 70
                             text: "Net In" + tableHeader.sortArrow("net_in")
                             font.bold: context.sortColumn === "net_in"
@@ -503,6 +518,7 @@ Rectangle {
                         }
 
                         Label {
+                            objectName: "systemMonitorSortHeader_net_out"
                             Layout.preferredWidth: 70
                             text: "Net Out" + tableHeader.sortArrow("net_out")
                             font.bold: context.sortColumn === "net_out"
@@ -554,6 +570,7 @@ Rectangle {
 
                         // Expand/collapse button for launch processes
                         Label {
+                            objectName: "systemMonitorExpandButton_" + delegateRoot.index
                             Layout.preferredWidth: 20
                             visible: delegateRoot.isLaunch
                             text: delegateRoot.expanded ? "\u25BC" : "\u25B6"  // ▼ or ▶
@@ -583,6 +600,7 @@ Rectangle {
 
                         // Node name
                         Label {
+                            objectName: "systemMonitorNameLabel_" + delegateRoot.index
                             Layout.fillWidth: true
                             Layout.preferredWidth: 180
                             text: {
@@ -611,6 +629,7 @@ Rectangle {
 
                         // CPU
                         Label {
+                            objectName: "systemMonitorCpuLabel_" + delegateRoot.index
                             Layout.preferredWidth: 60
                             text: proc.cpu_percent.toFixed(1) + "%"
                             color: proc.cpu_percent > thresholds.cpuError ? Material.color(Material.Red)
@@ -621,6 +640,7 @@ Rectangle {
 
                         // RAM
                         Label {
+                            objectName: "systemMonitorRamLabel_" + delegateRoot.index
                             Layout.preferredWidth: 80
                             text: d.formatBytes(proc.ram_bytes)
                             horizontalAlignment: Text.AlignRight
@@ -686,6 +706,7 @@ Rectangle {
                             }
 
                             Label {
+                                objectName: "systemMonitorStatusLabel_" + delegateRoot.index
                                 anchors.centerIn: parent
                                 text: parent.displayStatus
                                 font.pixelSize: 10
@@ -713,6 +734,7 @@ Rectangle {
 
                             MouseArea {
                                 id: killMouseArea
+                                objectName: "systemMonitorKillButton_" + delegateRoot.index
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
@@ -742,8 +764,9 @@ Rectangle {
 
                 // Empty state
                 Label {
+                    objectName: "systemMonitorNoProcessesLabel"
                     anchors.centerIn: parent
-                    visible: processListView.count === 0 && context.selectedHost
+                    visible: processListView.count === 0 && !!context.selectedHost
                     text: "No processes found"
                     color: palette.mid
                 }
@@ -826,10 +849,12 @@ Rectangle {
 
     Menu {
         id: processContextMenu
+        objectName: "systemMonitorContextMenu"
 
         property var processData: null
 
-        Action {
+        MenuItem {
+            objectName: "systemMonitorCopyNodeNameAction"
             text: "Copy Node Name"
             enabled: processContextMenu.processData !== null
             onTriggered: {
@@ -839,7 +864,8 @@ Rectangle {
             }
         }
 
-        Action {
+        MenuItem {
+            objectName: "systemMonitorCopyPidAction"
             text: "Copy PID"
             enabled: processContextMenu.processData !== null
             onTriggered: {
@@ -850,7 +876,8 @@ Rectangle {
 
         MenuSeparator {}
 
-        Action {
+        MenuItem {
+            objectName: "systemMonitorKillAction"
             text: "Kill Process (SIGTERM)"
             enabled: processContextMenu.processData !== null
             onTriggered: {
@@ -860,7 +887,8 @@ Rectangle {
             }
         }
 
-        Action {
+        MenuItem {
+            objectName: "systemMonitorForceKillAction"
             text: "Force Kill (SIGKILL)"
             enabled: processContextMenu.processData !== null
             onTriggered: {

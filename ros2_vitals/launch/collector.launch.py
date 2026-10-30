@@ -19,43 +19,41 @@ import os
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('ros2_vitals')
-    default_config = os.path.join(pkg_share, 'config', 'defaults.yaml')
+    pkg_share = get_package_share_directory("ros2_vitals")
+    default_config = os.path.join(pkg_share, "config", "defaults.yaml")
 
-    return LaunchDescription([
-        DeclareLaunchArgument(
-            'config_file',
-            default_value=default_config,
-            description='Path to configuration file'
-        ),
-
-        DeclareLaunchArgument(
-            'namespace',
-            default_value='',
-            description='Namespace for the bridge node'
-        ),
-
-        DeclareLaunchArgument(
-            'socket_path',
-            default_value='/run/vitals/collector.sock',
-            description='Path to vitals-daemon Unix socket'
-        ),
-
-        DeclareLaunchArgument(
-            'node_name',
-            default_value='vitals_collector',
-            description='Name of the bridge node'
-        ),
-
-        Node(
-            package='ros2_vitals',
-            executable='bridge',
-            name=LaunchConfiguration('node_name'),
-            namespace=LaunchConfiguration('namespace'),
-            parameters=[
-                LaunchConfiguration('config_file'),
-                {'socket_path': LaunchConfiguration('socket_path')},
-            ],
-            output='screen',
-        ),
-    ])
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "config_file",
+                default_value=default_config,
+                description="Path to configuration file",
+            ),
+            DeclareLaunchArgument(
+                "namespace",
+                default_value="",
+                description="Namespace for the bridge node",
+            ),
+            DeclareLaunchArgument(
+                "socket_path",
+                default_value="/run/vitals/collector.sock",
+                description="Path to vitals-daemon Unix socket",
+            ),
+            DeclareLaunchArgument(
+                "node_name",
+                default_value="vitals_collector",
+                description="Name of the bridge node",
+            ),
+            Node(
+                package="ros2_vitals",
+                executable="bridge",
+                name=LaunchConfiguration("node_name"),
+                namespace=LaunchConfiguration("namespace"),
+                parameters=[
+                    LaunchConfiguration("config_file"),
+                    {"socket_path": LaunchConfiguration("socket_path")},
+                ],
+                output="screen",
+            ),
+        ]
+    )

@@ -28,7 +28,7 @@ class NetworkCollector:
 
         for name, counters in io_counters.items():
             # Skip loopback
-            if name == 'lo':
+            if name == "lo":
                 continue
 
             # Check if interface is up
@@ -44,19 +44,21 @@ class NetworkCollector:
                 f"net.{name}.bytes_recv", counters.bytes_recv
             )
 
-            interfaces.append({
-                'name': name,
-                'is_up': is_up,
-                'bytes_sent_total': counters.bytes_sent,
-                'bytes_recv_total': counters.bytes_recv,
-                'packets_sent_total': counters.packets_sent,
-                'packets_recv_total': counters.packets_recv,
-                'errors_in': counters.errin,
-                'errors_out': counters.errout,
-                'drops_in': counters.dropin,
-                'drops_out': counters.dropout,
-                'bytes_sent_per_sec': send_rate,
-                'bytes_recv_per_sec': recv_rate,
-            })
+            interfaces.append(
+                {
+                    "name": name,
+                    "is_up": is_up,
+                    "bytes_sent_total": counters.bytes_sent,
+                    "bytes_recv_total": counters.bytes_recv,
+                    "packets_sent_total": counters.packets_sent,
+                    "packets_recv_total": counters.packets_recv,
+                    "errors_in": counters.errin,
+                    "errors_out": counters.errout,
+                    "drops_in": counters.dropin,
+                    "drops_out": counters.dropout,
+                    "bytes_sent_per_sec": send_rate,
+                    "bytes_recv_per_sec": recv_rate,
+                }
+            )
 
         return interfaces

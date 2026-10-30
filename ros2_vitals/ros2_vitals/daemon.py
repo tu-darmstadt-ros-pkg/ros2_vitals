@@ -19,19 +19,19 @@ import time
 
 # When running as root (sudo), user site-packages are not on sys.path.
 # Add them if SUDO_USER is set, so optional deps like pynvml are found.
-_sudo_user = os.environ.get('SUDO_USER')
+_sudo_user = os.environ.get("SUDO_USER")
 if _sudo_user and os.geteuid() == 0:
     import site
-    user_home = os.path.expanduser(f'~{_sudo_user}')
-    user_site = site.getusersitepackages().replace(
-        os.path.expanduser('~'), user_home
-    )
+
+    user_home = os.path.expanduser(f"~{_sudo_user}")
+    user_site = site.getusersitepackages().replace(os.path.expanduser("~"), user_home)
     if user_site not in sys.path:
         sys.path.insert(0, user_site)
 
-import psutil
+# Imported after the sys.path fix above so user site-packages are found under sudo
+import psutil  # noqa: E402
 
-from .collectors import (
+from .collectors import (  # noqa: E402
     SystemCollector,
     GpuCollector,
     NetworkCollector,
@@ -40,19 +40,19 @@ from .collectors import (
     NetStatsCollector,
 )
 
-logger = logging.getLogger('vitals-daemon')
+logger = logging.getLogger("vitals-daemon")
 
-HEADER_FMT = '!I'  # 4-byte big-endian unsigned int
+HEADER_FMT = "!I"  # 4-byte big-endian unsigned int
 HEADER_SIZE = struct.calcsize(HEADER_FMT)
 
-DEFAULT_SOCKET_PATH = '/run/vitals/collector.sock'
+DEFAULT_SOCKET_PATH = "/run/vitals/collector.sock"
 DEFAULT_RATE = 1.0
 
 
 def _send_message(sock: socket.socket, data: dict) -> bool:
     """Send a length-prefixed JSON message. Returns False on failure."""
     try:
-        payload = json.dumps(data, separators=(',', ':')).encode('utf-8')
+        payload = json.dumps(data, separators=(",", ":")).encode("utf-8")
         header = struct.pack(HEADER_FMT, len(payload))
         sock.sendall(header + payload)
         return True
@@ -64,7 +64,7 @@ def _recv_message(sock: socket.socket, timeout: float = 0.0) -> dict | None:
     """Receive a length-prefixed JSON message. Non-blocking by default."""
     try:
         sock.settimeout(timeout)
-        header = b''
+        header = b""
         while len(header) < HEADER_SIZE:
             chunk = sock.recv(HEADER_SIZE - len(header))
             if not chunk:
@@ -73,7 +73,7 @@ def _recv_message(sock: socket.socket, timeout: float = 0.0) -> dict | None:
         length = struct.unpack(HEADER_FMT, header)[0]
         if length > 10 * 1024 * 1024:  # 10 MB sanity limit
             return None
-        payload = b''
+        payload = b""
         while len(payload) < length:
             chunk = sock.recv(length - len(payload))
             if not chunk:
@@ -143,8 +143,9 @@ class VitalsDaemon:
             logger.info(f"Network stats backend: {self._net_stats.backend_name}")
 
         # Accept thread
-        accept_thread = threading.Thread(target=self._accept_loop, args=(server,),
-                                         daemon=True)
+        accept_thread = threading.Thread(
+            target=self._accept_loop, args=(server,), daemon=True
+        )
         accept_thread.start()
 
         try:
@@ -157,7 +158,7 @@ class VitalsDaemon:
                 # Send to client
                 with self._client_lock:
                     if self._client is not None:
-                        msg = {'type': 'status', 'data': snapshot}
+                        msg = {"type": "status", "data": snapshot}
                         if not _send_message(self._client, msg):
                             logger.info("Client disconnected")
                             try:
@@ -208,38 +209,38 @@ class VitalsDaemon:
 
         t0 = time.perf_counter()
         system = self._system.collect_all()
-        timings['system'] = time.perf_counter() - t0
+        timings["system"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
         gpus = self._gpu.get_gpus() if self._gpu.available else []
-        timings['gpu'] = time.perf_counter() - t0
+        timings["gpu"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
         interfaces = self._network.get_interfaces()
-        timings['network'] = time.perf_counter() - t0
+        timings["network"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
         disks = self._disk.get_partitions()
-        timings['disk'] = time.perf_counter() - t0
+        timings["disk"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
         processes = self._process.get_processes(include_children=True)
-        timings['process'] = time.perf_counter() - t0
+        timings["process"] = time.perf_counter() - t0
 
-        timings['total'] = sum(timings.values())
+        timings["total"] = sum(timings.values())
 
         # Log timing periodically
         self._cycle_count += 1
         if self._cycle_count % self._log_interval == 0:
-            formatted = {k: f"{v*1000:.1f}ms" for k, v in timings.items()}
+            formatted = {k: f"{v * 1000:.1f}ms" for k, v in timings.items()}
             logger.info(f"Collector timings: {formatted}")
 
         return {
-            'system': system,
-            'gpus': gpus,
-            'network_interfaces': interfaces,
-            'disks': disks,
-            'processes': processes,
+            "system": system,
+            "gpus": gpus,
+            "network_interfaces": interfaces,
+            "disks": disks,
+            "processes": processes,
         }
 
     def _handle_client_messages(self):
@@ -252,31 +253,31 @@ class VitalsDaemon:
         if msg is None:
             return
 
-        if msg.get('type') == 'kill':
-            self._handle_kill(msg.get('pid', 0), msg.get('force', False))
+        if msg.get("type") == "kill":
+            self._handle_kill(msg.get("pid", 0), msg.get("force", False))
 
     def _handle_kill(self, pid: int, force: bool):
         """Kill a process and send response to client."""
-        response = {'type': 'kill_response', 'success': False, 'message': ''}
+        response = {"type": "kill_response", "success": False, "message": ""}
         try:
             proc = psutil.Process(pid)
             if force:
                 proc.kill()
-                response['message'] = f"Sent SIGKILL to PID {pid}"
+                response["message"] = f"Sent SIGKILL to PID {pid}"
             else:
                 proc.terminate()
-                response['message'] = f"Sent SIGTERM to PID {pid}"
-            response['success'] = True
-            logger.info(response['message'])
+                response["message"] = f"Sent SIGTERM to PID {pid}"
+            response["success"] = True
+            logger.info(response["message"])
         except psutil.NoSuchProcess:
-            response['message'] = f"Process {pid} not found"
-            logger.warning(response['message'])
+            response["message"] = f"Process {pid} not found"
+            logger.warning(response["message"])
         except psutil.AccessDenied:
-            response['message'] = f"Permission denied for PID {pid}"
-            logger.warning(response['message'])
+            response["message"] = f"Permission denied for PID {pid}"
+            logger.warning(response["message"])
         except Exception as e:
-            response['message'] = f"Failed to kill PID {pid}: {e}"
-            logger.error(response['message'])
+            response["message"] = f"Failed to kill PID {pid}: {e}"
+            logger.error(response["message"])
 
         with self._client_lock:
             if self._client is not None:
@@ -295,16 +296,23 @@ class VitalsDaemon:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='ROS 2 Vitals Daemon')
-    parser.add_argument('--socket-path', default=DEFAULT_SOCKET_PATH,
-                        help=f'Unix socket path (default: {DEFAULT_SOCKET_PATH})')
-    parser.add_argument('--rate', type=float, default=DEFAULT_RATE,
-                        help=f'Collection rate in Hz (default: {DEFAULT_RATE})')
+    parser = argparse.ArgumentParser(description="ROS 2 Vitals Daemon")
+    parser.add_argument(
+        "--socket-path",
+        default=DEFAULT_SOCKET_PATH,
+        help=f"Unix socket path (default: {DEFAULT_SOCKET_PATH})",
+    )
+    parser.add_argument(
+        "--rate",
+        type=float,
+        default=DEFAULT_RATE,
+        help=f"Collection rate in Hz (default: {DEFAULT_RATE})",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
-        format='[%(levelname)s] [%(name)s]: %(message)s',
+        format="[%(levelname)s] [%(name)s]: %(message)s",
     )
 
     daemon = VitalsDaemon(args.socket_path, args.rate)
@@ -319,5 +327,5 @@ def main():
     daemon.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

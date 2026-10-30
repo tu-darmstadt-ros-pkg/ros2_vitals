@@ -102,13 +102,15 @@ class GpuCollector:
             # Name
             name = nvmlDeviceGetName(handle)
             if isinstance(name, bytes):
-                name = name.decode('utf-8')
+                name = name.decode("utf-8")
 
             # Utilization
             try:
                 util = nvmlDeviceGetUtilizationRates(handle)
                 utilization = float(util.gpu)
-                logger.debug(f"GPU {index} utilization: {utilization}% (memory util: {util.memory}%)")
+                logger.debug(
+                    f"GPU {index} utilization: {utilization}% (memory util: {util.memory}%)"
+                )
             except Exception as e:
                 logger.debug(f"Failed to get GPU {index} utilization: {e}")
                 utilization = 0.0
@@ -124,9 +126,9 @@ class GpuCollector:
 
             # Temperature
             try:
-                temperature = float(nvmlDeviceGetTemperature(
-                    handle, NVML_TEMPERATURE_GPU
-                ))
+                temperature = float(
+                    nvmlDeviceGetTemperature(handle, NVML_TEMPERATURE_GPU)
+                )
             except Exception:
                 temperature = -1.0
 
@@ -144,14 +146,14 @@ class GpuCollector:
                 fan_speed = -1
 
             return {
-                'index': index,
-                'name': name,
-                'utilization_percent': utilization,
-                'memory_total_bytes': memory_total,
-                'memory_used_bytes': memory_used,
-                'temperature_celsius': temperature,
-                'power_watts': power_watts,
-                'fan_speed_percent': fan_speed,
+                "index": index,
+                "name": name,
+                "utilization_percent": utilization,
+                "memory_total_bytes": memory_total,
+                "memory_used_bytes": memory_used,
+                "temperature_celsius": temperature,
+                "power_watts": power_watts,
+                "fan_speed_percent": fan_speed,
             }
         except Exception as e:
             logger.debug(f"Error getting GPU {index} info: {e}")
@@ -174,15 +176,17 @@ class GpuCollector:
             try:
                 handle = nvmlDeviceGetHandleByIndex(i)
                 # Check both compute and graphics processes
-                for get_procs in (nvmlDeviceGetComputeRunningProcesses,
-                                  nvmlDeviceGetGraphicsRunningProcesses):
+                for get_procs in (
+                    nvmlDeviceGetComputeRunningProcesses,
+                    nvmlDeviceGetGraphicsRunningProcesses,
+                ):
                     try:
                         processes = get_procs(handle)
                         for proc in processes:
                             if proc.pid == pid:
                                 return {
-                                    'gpu_index': i,
-                                    'memory_bytes': proc.usedGpuMemory or 0,
+                                    "gpu_index": i,
+                                    "memory_bytes": proc.usedGpuMemory or 0,
                                 }
                     except Exception:
                         continue
